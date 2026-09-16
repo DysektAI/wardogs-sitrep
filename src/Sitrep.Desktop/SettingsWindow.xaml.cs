@@ -121,9 +121,14 @@ public partial class SettingsWindow : Window
         DialogResult = true;
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    protected override void OnClosed(EventArgs e)
     {
-        _overlay.ApplyPosition(_config);
+        // X, Alt+F4, Escape and Cancel must all roll back the preview.
+        if (DialogResult != true)
+        {
+            _overlay.ApplyPosition(_config);
+        }
+        base.OnClosed(e);
     }
 }
 

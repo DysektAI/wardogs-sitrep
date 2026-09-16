@@ -88,8 +88,7 @@
                    Foreground="{StaticResource ErrorBrush}" TextWrapping="Wrap" Visibility="Collapsed"/>
 
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button x:Name="CancelButton" Content="Cancel" Width="96" Margin="0,0,10,0" IsCancel="True"
-                    Click="CancelButton_Click"/>
+            <Button x:Name="CancelButton" Content="Cancel" Width="96" Margin="0,0,10,0" IsCancel="True"/>
             <Button x:Name="SaveButton" Content="Save" Width="96" Style="{StaticResource PrimaryButtonStyle}"
                     IsDefault="True" Click="SaveButton_Click"/>
         </StackPanel>
