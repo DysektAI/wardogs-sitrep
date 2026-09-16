@@ -8,6 +8,11 @@ public partial class OverlayWindow : Window
     public OverlayWindow(AppConfig config)
     {
         InitializeComponent();
+        ApplyPosition(config);
+    }
+
+    public void ApplyPosition(AppConfig config)
+    {
         if (config.OverlayLeft >= 0 && config.OverlayTop >= 0)
         {
             Left = config.OverlayLeft;
@@ -29,9 +34,10 @@ public partial class OverlayWindow : Window
         IsHitTestVisible = false;
     }
 
-    public void ShowText(string text)
+    public void ShowText(string text, StatusLevel level)
     {
         OverlayText.Text = text;
+        AccentBar.Background = StatusLevelMapper.BrushFor(level);
         if (!IsVisible)
         {
             Show();

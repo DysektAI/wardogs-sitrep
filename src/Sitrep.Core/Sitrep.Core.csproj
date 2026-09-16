@@ -2,12 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- Declared so locked-mode restore matches the committed lock file in every context
+         (plain solution restore and win-x64 publish both evaluate the win-x64 graph). -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- No PackageReferences: opt out of lock file. Otherwise publish with
-         a runtime identifier rewrites packages.lock.json with a win-x64 graph
-         and breaks the next locked mode restore. Desktop/Tests keep locks. -->
-    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
   </PropertyGroup>
 
 </Project>

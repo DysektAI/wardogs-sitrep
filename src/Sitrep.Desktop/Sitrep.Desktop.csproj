@@ -27,6 +27,9 @@
     <None Include="..\..\src\Sitrep.Core\Data\l81-apollyon.json" Link="data\l81-apollyon.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Model is gitignored and fetched by scripts/setup-model.ps1 (SHA-pinned). Build must
+         not require it (CI builds before the fetch); publish after setup still packages it,
+         and the packaged self-test fails loudly if it is missing at runtime. -->
     <None Include="tessdata\eng.traineddata" Condition="Exists('tessdata\eng.traineddata')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
