@@ -1,4 +1,4 @@
-# Wardogs Mortar Assist (trial)
+# SITREP — WARDOGS companion app (mortar solver trial)
 
 Windows/C# helper: F8 sets mortar origin, middle-click/F7 captures target from visible map coordinates, shows range, bearing, and source-backed L81 MIL (uncorrected table).
 
