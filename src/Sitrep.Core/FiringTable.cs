@@ -112,8 +112,8 @@ public sealed class FiringTable
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             string weaponId = root.GetProperty("weaponId").GetString() ?? string.Empty;
-            double minRange = root.GetProperty("minRangeMeters").GetDouble();
-            double maxRange = root.GetProperty("maxRangeMeters").GetDouble();
+            decimal minRange = root.GetProperty("minRangeMeters").GetDecimal();
+            decimal maxRange = root.GetProperty("maxRangeMeters").GetDecimal();
             List<FiringSample> samples = new();
             foreach (var el in root.GetProperty("samples").EnumerateArray())
             {
@@ -123,12 +123,12 @@ public sealed class FiringTable
                 }
                 samples.Add(new FiringSample(el[0].GetDouble(), el[1].GetDouble()));
             }
-            // These are exact profile identifiers from JSON, not computed measurements: no tolerance.
-            if (weaponId != "L81" || !minRange.Equals(132d) || !maxRange.Equals(684d))
+            // Validate exact decimal profile metadata before converting to computation units.
+            if (weaponId != "L81" || minRange != 132m || maxRange != 684m)
             {
                 return (null, "CORRUPT_DATA");
             }
-            return TryCreate(weaponId, minRange, maxRange, samples);
+            return TryCreate(weaponId, (double)minRange, (double)maxRange, samples);
         }
         catch (Exception ex) when (ex is IOException or JsonException or KeyNotFoundException or InvalidOperationException or FormatException or UnauthorizedAccessException)
         {

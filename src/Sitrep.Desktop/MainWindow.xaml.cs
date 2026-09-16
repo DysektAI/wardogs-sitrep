@@ -129,7 +129,7 @@ public partial class MainWindow : Window
         _input.SetEnabled(false);
         Refresh();
         var settings = new SettingsWindow(_config, _overlay) { Owner = this };
-        if (settings.ShowDialog() is true)
+        if (settings.ShowDialog().GetValueOrDefault())
         {
             _foreground.Reset();
         }

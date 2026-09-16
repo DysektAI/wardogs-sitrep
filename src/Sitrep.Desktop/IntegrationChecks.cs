@@ -35,6 +35,11 @@ internal static class IntegrationChecks
         if (!condition) { throw new InvalidOperationException(message); }
     }
 
+    private static void RequireEqual<T>(T expected, T actual, string message)
+    {
+        Require(EqualityComparer<T>.Default.Equals(expected, actual), message);
+    }
+
     // Poll live state on the dispatcher; worker callbacks may change it between awaits.
     private static async Task UntilCompletedAsync(AssistantState state)
     {
@@ -192,10 +197,11 @@ internal static class IntegrationChecks
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             var origin = state.Pending;
             service.Request(CaptureRole.Target, new IntPtr(1), 400, 500, Capture);
-            Require(captures.Count == 2 && state.Pending == origin, "Target superseded pending origin.");
+            RequireEqual(2, captures.Count, "Target without usable origin took another snapshot.");
+            Require(ReferenceEquals(state.Pending, origin), "Target superseded pending origin.");
             service.Request(CaptureRole.Origin, new IntPtr(1), 400, 500, Capture);
             service.Request(CaptureRole.Origin, new IntPtr(1), 400, 500, Capture);
-            Require(captures.Count == 4, "Snapshots waited behind busy OCR instead of capturing on trigger.");
+            RequireEqual(4, captures.Count, "Snapshots waited behind busy OCR instead of capturing on trigger.");
             release.Set();
             await UntilCompletedAsync(state);
             Require(state.ConfirmedOrigin == new MapCoordinate(3, 100), "Newest snapshot did not win.");

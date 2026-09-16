@@ -1,7 +1,7 @@
 # VALIDATION
 
 ## Decisions
-- Scope: local Windows L81 trial, not a public production release or game-compatibility claim. SDK 10.0.303, WPF win-x64; Core/tests remain portable. No new package dependencies.
+- Scope: local Windows L81 trial, not a public production release or game-compatibility claim. SDK 10.0.303, WPF win-x64; Core/tests remain portable. No new package dependencies. Official checkout 7.0.1/setup-dotnet 6.0.0 are SHA-pinned (Node 24), replacing the CI-observed deprecated Node 20 action runtimes.
 - Tesseract 5.2.0; official English fast model pinned by revision and SHA256 in `scripts/setup-model.ps1` and `src/Sitrep.Desktop/tessdata/README.md`. No runtime downloads.
 - Apollyon L81 revision `e8d1ee9ceb07fe9ec4923b7b55e836f8b3bb3e05`: 132–684 m, linear interpolation, no extrapolation/terrain correction. All 84 upstream samples and limits independently compared with the local profile: exact match. See `src/Sitrep.Core/Data/PROVENANCE.md` for rights limitations.
 - Live starts disabled. F10 remains observed while disabled; capture keys do not. Foreground polling binds one HWND; loss hides the live overlay and invalidates targets, closure clears origin. Enabling/config changes reseed input; saving Settings clears window attachment/origin.
