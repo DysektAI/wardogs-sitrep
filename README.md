@@ -10,15 +10,15 @@ Windows/C# helper: F8 sets mortar origin, middle-click/F7 captures target from v
 
 ## Run
 1. `pwsh -ExecutionPolicy Bypass -File scripts/setup-model.ps1`
-2. `dotnet build WardogsMortar.slnx -c Release`
-3. `src/WardogsMortar.Desktop/bin/Release/net10.0-windows/win-x64/WardogsMortarAssist.exe`
+2. `dotnet build Sitrep.slnx -c Release`
+3. `src/Sitrep.Desktop/bin/Release/net10.0-windows/win-x64/Sitrep.exe`
 - Two windows appear by design: the control window (buttons, status, Exit) and a semi-transparent always-on-top overlay readout for use over the game. The overlay is click-through so it cannot hold buttons — that is why they are separate. Closing the control window exits everything.
-- Exit via control window Exit (kills overlay/workers). Config: %LocalAppData%/WardogsMortarAssist/config.json. Set ForegroundTitleContains to your game window title; empty leaves capture disabled. Overlay position: OverlayLeft/OverlayTop in config (defaults to top-right). Debug captures: %LocalAppData%/WardogsMortarAssist/captures (50 files max).
+- Exit via control window Exit (kills overlay/workers). Config: %LocalAppData%/Sitrep/config.json. Set ForegroundTitleContains to your game window title; empty leaves capture disabled. Overlay position: OverlayLeft/OverlayTop in config (defaults to top-right). Debug captures: %LocalAppData%/Sitrep/captures (50 files max).
 
 ## Testing without the game (already verified here)
-- `WardogsMortarAssist.exe --self-test` — dependency smoke: engine loads, synthetic label parses.
-- `WardogsMortarAssist.exe --diagnose-image MapCords.png --crop 900,640,300,180` — must print x101.53 y107.77, exit 0.
-- `WardogsMortarAssist.exe --diagnose-image MapPing.png --crop 900,300,300,160` — must print x101.66 y110.10, exit 0.
+- `Sitrep.exe --self-test` — dependency smoke: engine loads, synthetic label parses.
+- `Sitrep.exe --diagnose-image MapCords.png --crop 900,640,300,180` — must print x101.53 y107.77, exit 0.
+- `Sitrep.exe --diagnose-image MapPing.png --crop 900,300,300,160` — must print x101.66 y110.10, exit 0.
 - Full-image or garbage input must reject with exit 2, never a guessed coordinate.
 
 ## Testing in game
@@ -30,8 +30,8 @@ Windows/C# helper: F8 sets mortar origin, middle-click/F7 captures target from v
 6. Try F9 (clears), F10 twice (disable/enable), alt-tab out and back (overlay shows WINDOW LOST, old solution gone).
 
 ## Diagnostics
-- `WardogsMortarAssist.exe --self-test` (dependency smoke, not accuracy proof).
-- `WardogsMortarAssist.exe --diagnose-image <png> --crop x,y,w,h --report out.json` (uses live pipeline; exit 2 on OCR reject).
+- `Sitrep.exe --self-test` (dependency smoke, not accuracy proof).
+- `Sitrep.exe --diagnose-image <png> --crop x,y,w,h --report out.json` (uses live pipeline; exit 2 on OCR reject).
 
 ## Limits
 - L81 only, 132–684 m, linear table, no terrain correction. Outside limits shows OUT OF RANGE. Missing table shows TABLE UNVERIFIED. Failures never show plausible MIL.

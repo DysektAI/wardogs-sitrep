@@ -1,6 +1,6 @@
 # Retrieves pinned English fast model from official source and verifies checksum.
 param(
-    [string]$OutDir = "$PSScriptRoot/../src/WardogsMortar.Desktop/tessdata"
+    [string]$OutDir = "$PSScriptRoot/../src/Sitrep.Desktop/tessdata"
 )
 $ErrorActionPreference = "Stop"
 $url = "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata"

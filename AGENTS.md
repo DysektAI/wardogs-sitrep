@@ -6,25 +6,25 @@ Spec: `BUILD_SPEC.md` (normative). Handoff: `AGENT_PROMPT.md`. Status: `docs/VAL
 
 ```pwsh
 pwsh -ExecutionPolicy Bypass -File scripts/setup-model.ps1   # fresh clone first: tessdata/*.traineddata is gitignored, SHA-pinned
-dotnet build WardogsMortar.slnx -c Release                    # .slnx, not .sln
-dotnet test tests/WardogsMortar.Tests -c Release
+dotnet build Sitrep.slnx -c Release                    # .slnx, not .sln
+dotnet test tests/Sitrep.Tests -c Release
 pwsh -ExecutionPolicy Bypass -File scripts/verify.ps1        # canonical gate: locked restore + build + test + publish + packaged self-test/diagnose
 ```
 
-- Single test: `dotnet test tests/WardogsMortar.Tests -c Release --filter "FullyQualifiedName~GeoMath"`
-- Publish: `scripts/publish.ps1` → `out/WardogsMortarAssist-win-x64/` + `.zip` (gitignored). Test the published exe, not just `dotnet run`, and from an unrelated CWD.
-- Diagnostics (live `RecognitionPipeline`, exit 2 on OCR reject): `WardogsMortarAssist.exe --self-test` (dependency smoke only, not accuracy proof); `WardogsMortarAssist.exe --diagnose-image <png> --crop x,y,w,h --report out.json` (known-good crops in `docs/VALIDATION.md`).
+- Single test: `dotnet test tests/Sitrep.Tests -c Release --filter "FullyQualifiedName~GeoMath"`
+- Publish: `scripts/publish.ps1` → `out/SitrepAssist-win-x64/` + `.zip` (gitignored). Test the published exe, not just `dotnet run`, and from an unrelated CWD.
+- Diagnostics (live `RecognitionPipeline`, exit 2 on OCR reject): `SitrepAssist.exe --self-test` (dependency smoke only, not accuracy proof); `SitrepAssist.exe --diagnose-image <png> --crop x,y,w,h --report out.json` (known-good crops in `docs/VALIDATION.md`).
 
 ## Structure
 
-- `src/WardogsMortar.Core` (`net10.0`, portable): parser, `GeoMath`, `FiringTable`, `SolutionState`, `CaptureRegion`, `Data/l81-apollyon.json` + `PROVENANCE.md`. No WPF/Win32 here — tests must run without Windows/game.
-- `src/WardogsMortar.Desktop` (`net10.0-windows`, WPF `WinExe`, `x64`/`win-x64`): control + click-through overlay windows, `InputMonitor`, `ScreenCapture`, `OcrEngine`, `RecognitionPipeline`, `AssistantService`, `AppConfig`.
-- `tests/WardogsMortar.Tests` (xunit, pure deterministic): parser, math, table, state races, ROI. Image replay must reuse the live recognition path.
+- `src/Sitrep.Core` (`net10.0`, portable): parser, `GeoMath`, `FiringTable`, `SolutionState`, `CaptureRegion`, `Data/l81-apollyon.json` + `PROVENANCE.md`. No WPF/Win32 here — tests must run without Windows/game.
+- `src/Sitrep.Desktop` (`net10.0-windows`, WPF `WinExe`, `x64`/`win-x64`): control + click-through overlay windows, `InputMonitor`, `ScreenCapture`, `OcrEngine`, `RecognitionPipeline`, `AssistantService`, `AppConfig`.
+- `tests/Sitrep.Tests` (xunit, pure deterministic): parser, math, table, state races, ROI. Image replay must reuse the live recognition path.
 - SDK pinned in `global.json` (10.0.303, `rollForward: disable`); `packages.lock.json` committed, `RestorePackagesWithLockFile` on, CI/verify use `--locked-mode`. CI is Windows-only (`.github/workflows/ci.yml`).
 
 ## Gotchas
 
-- Bundled data: `AppContext.BaseDirectory` (`data/`, `tessdata/`). Writable: `%LocalAppData%/WardogsMortarAssist/` (`config.json`, `captures/`, 50 files max). Missing model/data must fail startup with one actionable error — never silent download or plausible output.
+- Bundled data: `AppContext.BaseDirectory` (`data/`, `tessdata/`). Writable: `%LocalAppData%/SitrepAssist/` (`config.json`, `captures/`, 50 files max). Missing model/data must fail startup with one actionable error — never silent download or plausible output.
 - Config defaults: `ForegroundTitleContains=""` leaves capture disabled; live starts disabled. Keys: F8 origin, F7/MMB target (same pipeline), F9 clear, F10 enable/disable. Closing control window must exit overlay/workers.
 - State: invalidate solution at request start (`READING`); origin failure leaves no usable origin; target failure keeps origin but kills target/solution (`TARGET OCR FAILED`); F9/disable/foreground-loss/origin-replace discard pending work (generation/revision guards — stale OCR completions never commit). One OCR worker, newest request only, off UI thread.
 - Parser: strict — invariant culture, 2 fractional digits, full token boundaries; reject partial/conflicting/missing-axis; no letter→digit repair, no invented decimals or bounds.

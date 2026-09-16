@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sitrep.Core/Sitrep.Core.csproj" />
+    <Project Path="src/Sitrep.Desktop/Sitrep.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sitrep.Tests/Sitrep.Tests.csproj" />
+  </Folder>
+</Solution>
