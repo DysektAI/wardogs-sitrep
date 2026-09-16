@@ -104,15 +104,9 @@ public sealed class AssistantService : IDisposable
         {
             captureError = $"CAPTURE_FAILED: {ex.GetType().Name}";
         }
-        if (!_windowExists(hwnd))
+        if (!CheckWindowAndForeground(hwnd))
         {
             image?.Dispose();
-            _state.OnGameWindowClosed();
-        }
-        else if (_getForeground() != hwnd || !IsForegroundAllowed(hwnd))
-        {
-            image?.Dispose();
-            _state.OnForegroundLost();
         }
         else if (image is null)
         {
@@ -136,6 +130,21 @@ public sealed class AssistantService : IDisposable
         _worker.DiscardPending();
     }
 
+    private bool CheckWindowAndForeground(IntPtr hwnd)
+    {
+        if (!_windowExists(hwnd))
+        {
+            _state.OnGameWindowClosed();
+            return false;
+        }
+        if (_getForeground() != hwnd || !IsForegroundAllowed(hwnd))
+        {
+            _state.OnForegroundLost();
+            return false;
+        }
+        return true;
+    }
+
     private void CaptureRetry(object? sender, EventArgs e)
     {
         _retryTimer.Stop();
@@ -149,16 +158,7 @@ public sealed class AssistantService : IDisposable
         {
             if (_disposed || _state.Pending?.Sequence != req.Sequence) { return; }
             var hwnd = new IntPtr(req.ForegroundHwnd);
-            if (!_windowExists(hwnd))
-            {
-                _state.OnGameWindowClosed();
-                return;
-            }
-            if (_getForeground() != hwnd || !IsForegroundAllowed(hwnd))
-            {
-                _state.OnForegroundLost();
-                return;
-            }
+            if (!CheckWindowAndForeground(hwnd)) { return; }
             if (_getCursor() != (req.CursorX, req.CursorY)
                 || System.Diagnostics.Stopwatch.GetElapsedTime(_snapshotTime) > TimeSpan.FromMilliseconds(500))
             {
@@ -174,16 +174,7 @@ public sealed class AssistantService : IDisposable
             {
                 captureError = $"CAPTURE_FAILED: {ex.GetType().Name}";
             }
-            if (!_windowExists(hwnd))
-            {
-                _state.OnGameWindowClosed();
-                return;
-            }
-            if (_getForeground() != hwnd || !IsForegroundAllowed(hwnd))
-            {
-                _state.OnForegroundLost();
-                return;
-            }
+            if (!CheckWindowAndForeground(hwnd)) { return; }
             if (second is null)
             {
                 CompleteFailure(req, captureError ?? "CAPTURE_FAILED");
