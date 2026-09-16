@@ -35,10 +35,11 @@ internal static class IntegrationChecks
         if (!condition) { throw new InvalidOperationException(message); }
     }
 
-    private static async Task UntilAsync(Func<bool> condition)
+    // Poll live state on the dispatcher; worker callbacks may change it between awaits.
+    private static async Task UntilCompletedAsync(AssistantState state)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (!condition())
+        while (state.Pending is not null)
         {
             if (DateTime.UtcNow > deadline) { throw new TimeoutException("Integration condition did not complete."); }
             await Task.Delay(10);
@@ -90,19 +91,25 @@ internal static class IntegrationChecks
                 g.Clear(Color.Black);
                 g.DrawImageUnscaled(scaled, 10, 10);
             }
-            for (int y = 0; y < actual.Height; y++)
-            {
-                for (int x = 0; x < actual.Width; x++)
-                {
-                    Color before = padded.GetPixel(x, y);
-                    int gray = (299 * before.R + 587 * before.G + 114 * before.B) / 1000;
-                    int expected = threshold ? (gray > 140 ? 255 : 0) : gray;
-                    Color after = actual.GetPixel(x, y);
-                    Require(after.R == expected && after.G == expected && after.B == expected && after.A == before.A,
-                        "LockBits preprocessing changed pixels.");
-                }
-            }
+            CheckPreprocessedPixels(actual, padded, threshold);
             Require(source.Width == 40, "Preprocessing disposed its borrowed input.");
+        }
+    }
+
+    private static void CheckPreprocessedPixels(Bitmap actual, Bitmap padded, bool threshold)
+    {
+        for (int y = 0; y < actual.Height; y++)
+        {
+            for (int x = 0; x < actual.Width; x++)
+            {
+                Color before = padded.GetPixel(x, y);
+                int gray = (299 * before.R + 587 * before.G + 114 * before.B) / 1000;
+                int binary = gray > 140 ? 255 : 0;
+                int expected = threshold ? binary : gray;
+                Color after = actual.GetPixel(x, y);
+                Require(after.R == expected && after.G == expected && after.B == expected && after.A == before.A,
+                    "LockBits preprocessing changed pixels.");
+            }
         }
     }
 
@@ -165,13 +172,13 @@ internal static class IntegrationChecks
             if (marker == 4) { throw new InvalidOperationException("synthetic native OCR failure"); }
             return new RecognitionResult(true, new MapCoordinate(marker, 100), "fixture", 1, "");
         }, () => new IntPtr(1), _ => true, _ => true, () => (400, 500));
-        int captures = 0;
+        var captures = new List<CaptureRequest>();
         var markers = new Dictionary<long, byte>();
         Bitmap Capture(CaptureRequest req)
         {
             Require(req.CursorX == 400 && req.CursorY == 500 && req.RoiX == 360 && req.RoiY == 324
                 && req.RoiWidth == 360 && req.RoiHeight == 200, "Request lost its event anchor/ROI.");
-            captures++;
+            captures.Add(req);
             if (!markers.TryGetValue(req.Sequence, out byte marker))
             {
                 marker = (byte)(markers.Count + 1);
@@ -185,15 +192,15 @@ internal static class IntegrationChecks
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             var origin = state.Pending;
             service.Request(CaptureRole.Target, new IntPtr(1), 400, 500, Capture);
-            Require(captures == 2 && state.Pending == origin, "Target superseded pending origin.");
+            Require(captures.Count == 2 && state.Pending == origin, "Target superseded pending origin.");
             service.Request(CaptureRole.Origin, new IntPtr(1), 400, 500, Capture);
             service.Request(CaptureRole.Origin, new IntPtr(1), 400, 500, Capture);
-            Require(captures == 4, "Snapshots waited behind busy OCR instead of capturing on trigger.");
+            Require(captures.Count == 4, "Snapshots waited behind busy OCR instead of capturing on trigger.");
             release.Set();
-            await UntilAsync(() => state.Pending is null);
+            await UntilCompletedAsync(state);
             Require(state.ConfirmedOrigin == new MapCoordinate(3, 100), "Newest snapshot did not win.");
             service.Request(CaptureRole.Target, new IntPtr(1), 400, 500, Capture);
-            await UntilAsync(() => state.Pending is null);
+            await UntilCompletedAsync(state);
             Require(state.Status.StartsWith("TARGET OCR FAILED: OCR_ERROR", StringComparison.Ordinal)
                 && state.ConfirmedOrigin.HasValue && state.ElevationMil is null, "OCR exception left stale/pending state.");
             service.Request(CaptureRole.Origin, new IntPtr(1), 400, 500, _ => throw new InvalidOperationException());
@@ -213,7 +220,7 @@ internal static class IntegrationChecks
         }, () => new IntPtr(1), _ => true, _ => true, () => (401, 500));
         int captures = 0;
         service.Request(CaptureRole.Origin, new IntPtr(1), 400, 500, _ => { captures++; return Frame(1); });
-        await UntilAsync(() => state.Pending is null);
+        await UntilCompletedAsync(state);
         Require(captures == 1 && recognitions == 0 && state.Status == DisplayStatuses.Moved
             && state.ConfirmedOrigin is null, "Retry failed to reject a moved anchor before capture/OCR.");
     }
@@ -237,7 +244,7 @@ internal static class IntegrationChecks
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             if (closed) { exists = false; } else { foreground = new IntPtr(2); }
             release.Set();
-            await UntilAsync(() => state.Pending is null);
+            await UntilCompletedAsync(state);
             Require(state.ConfirmedOrigin is null && state.ElevationMil is null, "Late completion bypassed window identity guard.");
             Require(state.Status == (closed ? DisplayStatuses.SetMortar : DisplayStatuses.WindowLost), "Wrong foreground failure status.");
         }

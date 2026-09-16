@@ -110,6 +110,9 @@ public sealed class AuditRegressionTests
     }
 
     [Theory]
+    [InlineData("{\"weaponId\":\"L81\",\"minRangeMeters\":132.000000001,\"maxRangeMeters\":684,\"samples\":[[132,850],[684,150]]}")]
+    [InlineData("{\"weaponId\":\"L81\",\"minRangeMeters\":132,\"maxRangeMeters\":683.999999999,\"samples\":[[132,850],[684,150]]}")]
+    [InlineData("{\"weaponId\":\"other\",\"minRangeMeters\":132,\"maxRangeMeters\":684,\"samples\":[[132,850],[684,150]]}")]
     [InlineData("null")]
     [InlineData("[]")]
     [InlineData("{\"weaponId\":42}")]

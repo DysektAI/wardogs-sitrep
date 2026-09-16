@@ -65,10 +65,10 @@ internal static class Win32
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct MONITORINFO
+    private struct MonitorInfo
     {
         public int Size;
         public RECT Monitor;
@@ -117,7 +117,7 @@ internal static class Win32
             return null;
         }
         var monitor = MonitorFromPoint(new POINT { X = cursorX, Y = cursorY }, 0);
-        var info = new MONITORINFO { Size = Marshal.SizeOf<MONITORINFO>() };
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
         if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info))
         {
             return null;

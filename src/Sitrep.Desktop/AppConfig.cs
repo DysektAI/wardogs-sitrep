@@ -64,7 +64,9 @@ public sealed class AppConfig
     {
         Validate();
         path = Path.GetFullPath(path ?? ConfigPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        string directory = Path.GetDirectoryName(path)
+            ?? throw new ArgumentException("Configuration path must name a file, not a filesystem root.", nameof(path));
+        Directory.CreateDirectory(directory);
         string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {

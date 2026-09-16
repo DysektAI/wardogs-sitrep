@@ -20,10 +20,10 @@ public sealed class ForegroundSession(AssistantState state)
             AttachedWindow = foreground;
         }
         bool active = allowed && foreground != 0 && foreground == AttachedWindow;
-        if (IsForeground && !active)
+        // Closure already cleared all state; preserve its SET MORTAR message.
+        if (IsForeground && !active && !changed)
         {
-            // Closure already cleared all state; preserve its SET MORTAR message.
-            if (!changed) { state.OnForegroundLost(); }
+            state.OnForegroundLost();
         }
         changed |= active != IsForeground;
         IsForeground = active;

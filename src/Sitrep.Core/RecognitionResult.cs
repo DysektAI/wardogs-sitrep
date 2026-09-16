@@ -11,7 +11,11 @@ public sealed record RecognitionResult(bool Success, MapCoordinate Coordinate, s
             return new RecognitionResult(false, default, raw, 0, "CONFLICTING_SNAPSHOTS_OR_RECIPES");
         }
         // Never combine partial axes: each result was parsed independently from one frame.
-        var result = retry.Success ? retry : first.Success ? first : retry;
+        var result = retry;
+        if (!retry.Success && first.Success)
+        {
+            result = first;
+        }
         return result with { RawText = raw };
     }
 }

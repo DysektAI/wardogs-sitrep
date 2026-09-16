@@ -21,7 +21,7 @@
 
 ## Executed checks (Windows workstation, 2026-09-16)
 - `dotnet --version`: 10.0.303. `dotnet build Sitrep.slnx -c Release`: 0 warnings, 0 errors.
-- `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -PrivateFixtures`: **exit 0 / VERIFY OK**. Locked restore/build/publish, **114 passed / 0 failed / 0 skipped**, packaged self-test/integration, failure probes, five negative images and both private positives. Executables run from unrelated temporary CWD; user config is not touched by diagnostics.
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -PrivateFixtures`: **exit 0 / VERIFY OK**. Locked restore/build/publish, **117 passed / 0 failed / 0 skipped**, packaged self-test/integration, failure probes, five negative images and both private positives. Executables run from unrelated temporary CWD; user config is not touched by diagnostics.
 - Startup regression first reproduced six missing-actionable-message failures: `InvalidDataException` is not an `IOException`. Fixed contextual load errors and interactive catch path; full suite and packaged startup-handler checks now pass.
 - Self-test accepts exactly x101.53 y107.77 using the live OCR path. Packaged integration checks preprocessing pixel parity/ownership, native overlay bounds/styles, invalid startup config, debug retention, frozen/busy snapshot queue, retry movement, OCR exceptions, and completion focus/closure guards.
 - All five committed negative images reject (exit 2); none accepted. `conflict.png` is truncated and rejects on precision, so true recipe/snapshot conflicts also have deterministic regressions.
@@ -30,7 +30,7 @@
 - Local artifact: `out/Sitrep-win-x64/` and `out/Sitrep-win-x64.zip`, with notices/provenance/model. Visual C++ x64 runtime is a separate prerequisite. No release or installer produced.
 
 ## Blockers / pending
-- CI and PR review results are recorded on the PR; local success is not a claim of remote success or reviewer approval.
+- PR #3: initial `f97c58c` Windows push/PR verification and CodeQL passed; SonarCloud reported 14 annotations. Follow-up preserves exact profile matching (with near-limit rejection tests), makes callback observations explicit in integration tests, splits pixel-check complexity, and clarifies nullable/branch/interop/output handling without suppressions. Latest CI and review status live on the PR; earlier success is not evidence for a newer head or reviewer approval.
 - **Not game-validated:** publisher approval, real click-through/MMB delivery and trigger loss under load, cursor-label alignment/edges/zoom/UI scale, mixed-DPI displays, rapid targets/F9/F10/alt-tab/exit in game, 30 captures, p95 latency, idle CPU and repeated-OCR memory measurements. Native styles at 96 DPI and fake-boundary tests do not prove these.
 - **Redistribution review remains open:** upstream excludes third-party material from its MIT grant; table authorship/rights are not independently established. Native codec/subdependency inventory is not fully supplied by the wrapper package. Top-level Tesseract, Leptonica (BSD, not Apache), InteropDotNet, model, data and SDK runtime notices are included, but this is not complete legal clearance for public binary distribution.
 - Completion label: **Implemented, offline trial gates passed**. No blanket production/live-use all-clear; remaining real-input and rights checks must not be inferred from synthetic tests.

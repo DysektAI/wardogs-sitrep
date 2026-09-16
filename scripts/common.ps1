@@ -35,8 +35,8 @@ function Invoke-PackagedCheck {
       $process.WaitForExit()
       throw "Packaged check timed out: $Arguments"
     }
-    Write-Host $stdout.GetAwaiter().GetResult()
-    Write-Host $stderr.GetAwaiter().GetResult()
+    Write-Output $stdout.GetAwaiter().GetResult()
+    Write-Output $stderr.GetAwaiter().GetResult()
     if ($process.ExitCode -ne $ExpectedExit) {
       throw "Packaged check exited $($process.ExitCode), expected ${ExpectedExit}: $Arguments"
     }

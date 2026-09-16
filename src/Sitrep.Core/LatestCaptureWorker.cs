@@ -57,7 +57,7 @@ public sealed class LatestCaptureWorker<T> : IDisposable where T : class, IDispo
                 {
                     return;
                 }
-                item = _pending!;
+                item = _pending ?? throw new InvalidOperationException("Worker woke without a pending capture.");
                 _pending = null;
             }
             using (item)

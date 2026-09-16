@@ -58,7 +58,8 @@ public static class ScreenCapture
                     for (int x = 0; x < row.Length; x += 4)
                     {
                         int lum = (299 * row[x + 2] + 587 * row[x + 1] + 114 * row[x]) / 1000;
-                        byte value = (byte)(threshold ? (lum > 140 ? 255 : 0) : lum);
+                        int binary = lum > 140 ? 255 : 0;
+                        byte value = (byte)(threshold ? binary : lum);
                         row[x] = row[x + 1] = row[x + 2] = value;
                     }
                     Marshal.Copy(row, 0, address, row.Length);

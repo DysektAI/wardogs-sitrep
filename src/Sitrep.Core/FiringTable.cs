@@ -123,7 +123,8 @@ public sealed class FiringTable
                 }
                 samples.Add(new FiringSample(el[0].GetDouble(), el[1].GetDouble()));
             }
-            if (weaponId != "L81" || minRange != 132 || maxRange != 684)
+            // These are exact profile identifiers from JSON, not computed measurements: no tolerance.
+            if (weaponId != "L81" || !minRange.Equals(132d) || !maxRange.Equals(684d))
             {
                 return (null, "CORRUPT_DATA");
             }
