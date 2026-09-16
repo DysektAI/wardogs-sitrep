@@ -19,10 +19,19 @@ public sealed class AuditRegressionTests
     [InlineData("x101.53 y107.77", "x101.53 y107.77", true)]
     [InlineData("x101.53", "y107.77", false)]
     [InlineData("noise.", "x101.53 y107.77", true)]
+    [InlineData("x101.53 x101.54 y107.77", "x101.53 y107.77", false)]
+    [InlineData("x101.53 y107.77", "x101.53 x101.54 y107.77", false)]
     public void RecipesMustNotDisagreeOrCombineAxes(string a, string b, bool expected)
     {
-        Assert.Equal(expected, RecognitionConsensus.TryAccept([a, b], out var coordinate, out _));
-        if (expected) { Assert.Equal(new MapCoordinate(101.53, 107.77), coordinate); }
+        Assert.Equal(expected, RecognitionConsensus.TryAccept([a, b], out var coordinate, out var reason));
+        if (expected)
+        {
+            Assert.Equal(new MapCoordinate(101.53, 107.77), coordinate);
+        }
+        else if (a.Contains("x101.54", StringComparison.Ordinal) || b.Contains("x101.54", StringComparison.Ordinal))
+        {
+            Assert.Equal("CONFLICTING_RECIPES", reason);
+        }
     }
 
     [Theory]

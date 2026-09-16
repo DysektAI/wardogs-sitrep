@@ -102,4 +102,57 @@ public sealed class LatestCaptureWorkerTests
         }
         finally { release.Set(); }
     }
+
+    private sealed class FaultyFrame(int id, bool throwOnDispose = false) : IDisposable
+    {
+        public int Id { get; } = id;
+        public int DisposeCount;
+        public TaskCompletionSource Disposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void Dispose()
+        {
+            Interlocked.Increment(ref DisposeCount);
+            Disposed.TrySetResult();
+            if (throwOnDispose)
+            {
+                throw new InvalidOperationException("synthetic dispose failure");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task FailureCallbackOrDisposalExceptionDoesNotTerminateWorker()
+    {
+        var processed = new ConcurrentQueue<int>();
+        using var worker = new LatestCaptureWorker<FaultyFrame>(frame =>
+        {
+            if (frame.Id == 1)
+            {
+                throw new InvalidOperationException("synthetic process failure");
+            }
+            processed.Enqueue(frame.Id);
+        }, (frame, _) =>
+        {
+            if (frame.Id == 1)
+            {
+                throw new InvalidOperationException("synthetic failure-callback exception");
+            }
+        });
+
+        var first = new FaultyFrame(1);
+        worker.Enqueue(first);
+        await first.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var second = new FaultyFrame(2, throwOnDispose: true);
+        worker.Enqueue(second);
+        await second.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var third = new FaultyFrame(3);
+        worker.Enqueue(third);
+        await third.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(new[] { 2, 3 }, processed.ToArray());
+        Assert.Equal(1, first.DisposeCount);
+        Assert.Equal(1, second.DisposeCount);
+        Assert.Equal(1, third.DisposeCount);
+    }
 }

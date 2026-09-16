@@ -11,6 +11,11 @@ public static class RecognitionConsensus
         {
             if (!CoordinateParser.TryParse(raw, out var candidate, out var rejection))
             {
+                if (rejection == "CONFLICTING_PAIR")
+                {
+                    reason = "CONFLICTING_RECIPES";
+                    return false;
+                }
                 reason = rejection;
                 continue;
             }

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Sitrep.Core;
 
 /// <summary>Owns one active item and one replaceable pending item; drains before disposal returns.</summary>
@@ -60,7 +62,7 @@ public sealed class LatestCaptureWorker<T> : IDisposable where T : class, IDispo
                 item = _pending ?? throw new InvalidOperationException("Worker woke without a pending capture.");
                 _pending = null;
             }
-            using (item)
+            try
             {
                 try
                 {
@@ -68,7 +70,25 @@ public sealed class LatestCaptureWorker<T> : IDisposable where T : class, IDispo
                 }
                 catch (Exception ex)
                 {
-                    _failed(item, ex);
+                    try
+                    {
+                        _failed(item, ex);
+                    }
+                    catch (Exception callbackEx)
+                    {
+                        System.Diagnostics.Trace.TraceError("LatestCaptureWorker failure callback threw: {0}", callbackEx);
+                    }
+                }
+            }
+            finally
+            {
+                try
+                {
+                    item.Dispose();
+                }
+                catch (Exception disposeEx)
+                {
+                    System.Diagnostics.Trace.TraceError("LatestCaptureWorker item disposal threw: {0}", disposeEx);
                 }
             }
         }

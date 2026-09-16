@@ -95,22 +95,28 @@ public sealed class AssistantService : IDisposable
         DiscardPending();
         // Snapshot on the input dispatcher, before any wait for recognition. The request owns the anchor/ROI.
         Bitmap? image = null;
+        string? captureError = null;
         try
         {
             image = capture(req);
         }
         catch (Exception ex)
         {
-            CompleteFailure(req, $"CAPTURE_FAILED: {ex.GetType().Name}");
+            captureError = $"CAPTURE_FAILED: {ex.GetType().Name}";
         }
-        if (image is null)
+        if (!_windowExists(hwnd))
         {
-            CompleteFailure(req, "CAPTURE_FAILED");
+            image?.Dispose();
+            _state.OnGameWindowClosed();
         }
-        else if (_getForeground() != hwnd)
+        else if (_getForeground() != hwnd || !IsForegroundAllowed(hwnd))
         {
-            image.Dispose();
+            image?.Dispose();
             _state.OnForegroundLost();
+        }
+        else if (image is null)
+        {
+            CompleteFailure(req, captureError ?? "CAPTURE_FAILED");
         }
         else
         {
@@ -159,13 +165,31 @@ public sealed class AssistantService : IDisposable
                 CompleteFailure(req, DisplayStatuses.Moved);
                 return;
             }
-            second = retry.Capture(req);
-            if (second is null)
+            string? captureError = null;
+            try
             {
-                CompleteFailure(req, "CAPTURE_FAILED");
+                second = retry.Capture(req);
+            }
+            catch (Exception ex)
+            {
+                captureError = $"CAPTURE_FAILED: {ex.GetType().Name}";
+            }
+            if (!_windowExists(hwnd))
+            {
+                _state.OnGameWindowClosed();
                 return;
             }
-            if (_getCursor() != (req.CursorX, req.CursorY) || _getForeground() != hwnd)
+            if (_getForeground() != hwnd || !IsForegroundAllowed(hwnd))
+            {
+                _state.OnForegroundLost();
+                return;
+            }
+            if (second is null)
+            {
+                CompleteFailure(req, captureError ?? "CAPTURE_FAILED");
+                return;
+            }
+            if (_getCursor() != (req.CursorX, req.CursorY))
             {
                 CompleteFailure(req, DisplayStatuses.Moved);
                 return;
