@@ -1,0 +1,20 @@
+﻿<Window x:Class="WardogsMortar.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WARDOGS Mortar Assistant" Height="340" Width="420" ResizeMode="NoResize">
+    <StackPanel Margin="12">
+        <TextBlock x:Name="StatusText" FontSize="16" FontWeight="Bold" Text="Starting..." />
+        <TextBlock x:Name="WeaponText" Margin="0,8,0,0" Text="Weapon: L81 (table-backed)" />
+        <TextBlock x:Name="OriginText" Text="Origin: —" />
+        <TextBlock x:Name="TargetText" Text="Target: —" />
+        <TextBlock x:Name="RangeText" Text="Range: —" />
+        <TextBlock x:Name="BearingText" Text="Bearing: —" />
+        <TextBlock x:Name="ElevationText" Text="Elevation: —" />
+        <TextBlock x:Name="HintText" Margin="0,8,0,0" FontSize="11" Text="F8 origin • MMB/F7 target • F9 clear • F10 enable/disable • Live starts disabled" />
+        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+            <Button x:Name="EnableButton" Content="Enable" Width="90" Margin="0,0,8,0" Click="EnableButton_Click" />
+            <Button x:Name="ClearButton" Content="Clear (F9)" Width="90" Margin="0,0,8,0" Click="ClearButton_Click" />
+            <Button x:Name="ExitButton" Content="Exit" Width="90" Click="ExitButton_Click" />
+        </StackPanel>
+    </StackPanel>
+</Window>
