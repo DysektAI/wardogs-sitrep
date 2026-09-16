@@ -42,7 +42,14 @@ public sealed class InputMonitor : IDisposable
 
     private void Tick(object? sender, EventArgs e)
     {
-        Poll?.Invoke();
+        try
+        {
+            Poll?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceError("InputMonitor Poll error: {0}", ex);
+        }
         Check(Win32.VK_F10, F10Pressed, true);
         Check(Win32.VK_F9, F9Pressed, _enabled);
         Check(Win32.VK_F8, F8Pressed, _enabled);
@@ -54,7 +61,14 @@ public sealed class InputMonitor : IDisposable
     {
         if (_edges.Pressed(vk, IsDown(vk), enabled))
         {
-            handler?.Invoke();
+            try
+            {
+                handler?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError("InputMonitor handler error for vk {0}: {1}", vk, ex);
+            }
         }
     }
 

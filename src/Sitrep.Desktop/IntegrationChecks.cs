@@ -136,7 +136,7 @@ internal static class IntegrationChecks
             long style = Win32.GetExtendedStyle(hwnd);
             long mask = Win32.WS_EX_TRANSPARENT | Win32.WS_EX_LAYERED | Win32.WS_EX_NOACTIVATE;
             Require((style & mask) == mask, "Missing click-through/non-activation styles.");
-            Require(ScreenCapture.CaptureRegion(region, region, [region]) is null, "Own-window overlap accepted.");
+            Require(ScreenCapture.CaptureRegion(region, region, MainWindow.GetVisibleExclusions()) is null, "Own-window overlap accepted.");
             Console.WriteLine($"Overlay bounds/styles checked at DPI {System.Windows.Media.VisualTreeHelper.GetDpi(overlay).PixelsPerInchX}.");
         }
         finally { overlay.Close(); }

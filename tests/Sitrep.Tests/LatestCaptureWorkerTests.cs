@@ -123,6 +123,7 @@ public sealed class LatestCaptureWorkerTests
     public async Task FailureCallbackOrDisposalExceptionDoesNotTerminateWorker()
     {
         var processed = new ConcurrentQueue<int>();
+        var callbackInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var worker = new LatestCaptureWorker<FaultyFrame>(frame =>
         {
             if (frame.Id == 1)
@@ -134,12 +135,14 @@ public sealed class LatestCaptureWorkerTests
         {
             if (frame.Id == 1)
             {
+                callbackInvoked.TrySetResult();
                 throw new InvalidOperationException("synthetic failure-callback exception");
             }
         });
 
         var first = new FaultyFrame(1);
         worker.Enqueue(first);
+        await callbackInvoked.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await first.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         var second = new FaultyFrame(2, throwOnDispose: true);

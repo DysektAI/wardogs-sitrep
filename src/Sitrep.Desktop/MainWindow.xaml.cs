@@ -58,12 +58,15 @@ public partial class MainWindow : Window
         }
         var roi = new CaptureRegion(req.RoiX, req.RoiY, req.RoiWidth, req.RoiHeight);
         var bounds = Win32.GetCaptureBounds(hwnd, req.CursorX, req.CursorY);
-        var excludes = Application.Current.Windows.Cast<Window>()
-            .Where(w => w.IsVisible)
-            .Select(w => Win32.GetScreenRegion(new System.Windows.Interop.WindowInteropHelper(w).Handle))
-            .ToArray();
+        var excludes = GetVisibleExclusions();
         return ScreenCapture.CaptureRegion(roi, bounds, excludes);
     }
+
+    internal static CaptureRegion[] GetVisibleExclusions() =>
+        Application.Current?.Windows.Cast<Window>()
+            .Where(w => w.IsVisible)
+            .Select(w => Win32.GetScreenRegion(new System.Windows.Interop.WindowInteropHelper(w).Handle))
+            .ToArray() ?? [];
 
     private void GuardedCapture(CaptureRole role)
     {

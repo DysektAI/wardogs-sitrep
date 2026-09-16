@@ -39,8 +39,12 @@ Windows/C# helper: F8 sets mortar origin, middle-click/F7 captures target from v
 . ./scripts/common.ps1
 $exe = (Resolve-Path 'out/Sitrep-win-x64/Sitrep.exe').Path
 Invoke-PackagedCheck $exe @('--self-test')
-Invoke-PackagedCheck $exe @('--diagnose-image', (Resolve-Path 'MapCords.png').Path,
-  '--crop', '900,640,300,180', '--report', "$PWD/out/origin.json")
+# Negative fixture (committed, exit 2):
+Invoke-PackagedCheck $exe @('--diagnose-image', (Resolve-Path 'tests/fixtures-neg/conflict.png').Path,
+  '--report', "$PWD/out/conflict.json") -ExpectedExit 2
+# Or local user fixture if supplied (gitignored MapCords.png, exit 0):
+# Invoke-PackagedCheck $exe @('--diagnose-image', (Resolve-Path 'MapCords.png').Path,
+#   '--crop', '900,640,300,180', '--report', "$PWD/out/origin.json")
 ```
 
 Self-test is dependency smoke. Image diagnosis shares live OCR; exit 0 means accepted, 2 means OCR/dependency rejection, 1 means invocation/file/error failure. Reports preserve raw recipe text and engine confidence (not a correctness probability). Debug mode stores bounded PNG/JSON records (50 files total) locally; the old unbounded `records.log` is retired.

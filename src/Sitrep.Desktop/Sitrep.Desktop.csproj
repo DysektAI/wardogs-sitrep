@@ -36,12 +36,12 @@
 
   <Target Name="IncludeRuntimeNotices" AfterTargets="ResolveFrameworkReferences" Condition="'$(SelfContained)' == 'true'">
     <ItemGroup>
-      <_RuntimeNotice Include="%(ResolvedRuntimePack.PackageDirectory)\LICENSE*;%(ResolvedRuntimePack.PackageDirectory)\THIRD-PARTY-NOTICES*"
+      <_RuntimeNotice Include="%(ResolvedRuntimePack.PackageDirectory)\LICENSE*;%(ResolvedRuntimePack.PackageDirectory)\THIRD-PARTY-NOTICES*;%(ResolvedRuntimePack.PackageDirectory)\ThirdPartyNotices*"
                       Condition="'%(ResolvedRuntimePack.FrameworkName)' == 'Microsoft.NETCore.App' Or '%(ResolvedRuntimePack.FrameworkName)' == 'Microsoft.WindowsDesktop.App'">
         <Pack>%(ResolvedRuntimePack.NuGetPackageId)</Pack>
       </_RuntimeNotice>
       <_RuntimeLicense Include="@(_RuntimeNotice)" Condition="$([System.String]::Copy('%(Filename)').ToUpperInvariant().StartsWith('LICENSE'))" />
-      <_RuntimeThirdParty Include="@(_RuntimeNotice)" Condition="$([System.String]::Copy('%(Filename)').ToUpperInvariant().StartsWith('THIRD-PARTY-NOTICES'))" />
+      <_RuntimeThirdParty Include="@(_RuntimeNotice)" Condition="$([System.String]::Copy('%(Filename)').ToUpperInvariant().Replace('-', '').StartsWith('THIRDPARTYNOTICES'))" />
       <Content Include="@(_RuntimeNotice)" Link="notices\runtime\%(_RuntimeNotice.Pack)\%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
     <Error Condition="'@(_RuntimeLicense)' == ''" Text="Missing required SDK runtime LICENSE notice in resolved runtime packs." />
@@ -51,7 +51,7 @@
   <Target Name="ValidatePublishedRuntimeNotices" AfterTargets="Publish" Condition="'$(SelfContained)' == 'true'">
     <ItemGroup>
       <_PublishedLicense Include="$(PublishDir)notices\runtime\**\*LICENSE*" />
-      <_PublishedThirdParty Include="$(PublishDir)notices\runtime\**\*THIRD-PARTY-NOTICES*" />
+      <_PublishedThirdParty Include="$(PublishDir)notices\runtime\**\*THIRD-PARTY-NOTICES*;$(PublishDir)notices\runtime\**\*ThirdPartyNotices*" />
     </ItemGroup>
     <Error Condition="'@(_PublishedLicense)' == ''" Text="Published output is missing required SDK runtime LICENSE file in notices\runtime." />
     <Error Condition="'@(_PublishedThirdParty)' == ''" Text="Published output is missing required SDK runtime THIRD-PARTY-NOTICES file in notices\runtime." />
