@@ -27,7 +27,7 @@
     <None Include="..\..\src\Sitrep.Core\Data\l81-apollyon.json" Link="data\l81-apollyon.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="tessdata\eng.traineddata">
+    <None Include="tessdata\eng.traineddata" Condition="Exists('tessdata\eng.traineddata')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
