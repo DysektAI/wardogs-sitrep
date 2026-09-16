@@ -2,12 +2,6 @@
   "version": 1,
   "dependencies": {
     "net10.0-windows7.0": {
-      "System.Drawing.Common": {
-        "type": "Direct",
-        "requested": "[9.0.10, )",
-        "resolved": "9.0.10",
-        "contentHash": "FDakPhIcxHnhslLiz4ZQ+ALpHRpCU3zOep9Mcq+4hL23XwQrzmgJNYvf1tH4kJ/V36wO/ZhRr8nOfiz26P3wKg=="
-      },
       "Tesseract": {
         "type": "Direct",
         "requested": "[5.2.0, )",
