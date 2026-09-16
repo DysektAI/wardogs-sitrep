@@ -6,42 +6,10 @@ public sealed class FiringTableTests
 {
     private static FiringTable LoadL81()
     {
-        string[] candidates =
-        [
-            Path.Combine(AppContext.BaseDirectory, "data", "l81-apollyon.json"),
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "Sitrep.Core", "Data", "l81-apollyon.json"),
-            "/src/Sitrep.Core/Data/l81-apollyon.json",
-            "src/Sitrep.Core/Data/l81-apollyon.json",
-        ];
-        foreach (var p in candidates)
-        {
-            if (File.Exists(p))
-            {
-                var (t, e) = FiringTable.LoadApollyonL81(p);
-                Assert.True(t is not null, $"load failed for {p}: {e}");
-                return t!;
-            }
-        }
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (int i = 0; i < 8 && dir is not null; i++)
-        {
-            var f = Path.Combine(dir.FullName, "src", "Sitrep.Core", "Data", "l81-apollyon.json");
-            if (File.Exists(f))
-            {
-                var (t, e) = FiringTable.LoadApollyonL81(f);
-                Assert.True(t is not null, e);
-                return t!;
-            }
-            var g = Directory.GetFiles(dir.FullName, "l81-apollyon.json", SearchOption.AllDirectories).FirstOrDefault();
-            if (g is not null)
-            {
-                var (t, e) = FiringTable.LoadApollyonL81(g);
-                Assert.True(t is not null, e);
-                return t!;
-            }
-            dir = dir.Parent;
-        }
-        throw new FileNotFoundException("l81-apollyon.json not found");
+        var (table, error) = FiringTable.LoadApollyonL81(Path.Combine(AppContext.BaseDirectory, "data", "l81-apollyon.json"));
+        Assert.Null(error);
+        Assert.NotNull(table);
+        return table;
     }
 
     [Fact]
@@ -114,13 +82,13 @@ public sealed class FiringTableTests
     }
 
     [Fact]
-    public void SortsUnorderedRanges()
+    public void RejectsUnorderedRanges()
     {
+        // BUILD_SPEC requires strictly increasing input; sorting used to hide corrupt source data.
         var (table, err) = FiringTable.TryCreate("L81", 100, 500,
             [new FiringSample(200, 700), new FiringSample(150, 750)]);
-        Assert.Null(err);
-        Assert.NotNull(table);
-        Assert.Equal(150.0, table!.Samples[0].RangeMeters);
+        Assert.Null(table);
+        Assert.Equal("DUPLICATE_OR_UNORDERED_RANGE", err);
     }
 
     [Fact]

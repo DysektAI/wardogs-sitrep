@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Sitrep.Core\Sitrep.Core.csproj" />
@@ -7,8 +7,6 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -23,15 +21,39 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\src\Sitrep.Core\Data\l81-apollyon.json" Link="data\l81-apollyon.json">
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\notices\**\*" Link="notices\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Sitrep.Core\Data\PROVENANCE.md" Link="data\PROVENANCE.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Sitrep.Core\Data\l81-apollyon.json" Link="data\l81-apollyon.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <!-- Model is gitignored and fetched by scripts/setup-model.ps1 (SHA-pinned). Build must
-         not require it (CI builds before the fetch); publish after setup still packages it,
-         and the packaged self-test fails loudly if it is missing at runtime. -->
+    <None Update="tessdata\README.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Keep model-free compile possible; canonical verify/publish validates and packages the model. -->
     <None Include="tessdata\eng.traineddata" Condition="Exists('tessdata\eng.traineddata')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
+  <Target Name="IncludeRuntimeNotices" AfterTargets="ResolveFrameworkReferences" Condition="'$(SelfContained)' == 'true'">
+    <ItemGroup>
+      <_RuntimeNotice Include="%(ResolvedRuntimePack.PackageDirectory)\LICENSE*;%(ResolvedRuntimePack.PackageDirectory)\THIRD-PARTY-NOTICES*;%(ResolvedRuntimePack.PackageDirectory)\ThirdPartyNotices*"
+                      Condition="'%(ResolvedRuntimePack.FrameworkName)' == 'Microsoft.NETCore.App' Or '%(ResolvedRuntimePack.FrameworkName)' == 'Microsoft.WindowsDesktop.App'">
+        <Pack>%(ResolvedRuntimePack.NuGetPackageId)</Pack>
+      </_RuntimeNotice>
+      <_RuntimeLicense Include="@(_RuntimeNotice)" Condition="$([System.String]::Copy('%(Filename)').ToUpperInvariant().StartsWith('LICENSE'))" />
+      <_RuntimeThirdParty Include="@(_RuntimeNotice)" Condition="$([System.String]::Copy('%(Filename)').ToUpperInvariant().Replace('-', '').StartsWith('THIRDPARTYNOTICES'))" />
+      <Content Include="@(_RuntimeNotice)" Link="notices\runtime\%(_RuntimeNotice.Pack)\%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+    <Error Condition="'@(_RuntimeLicense)' == ''" Text="Missing required SDK runtime LICENSE notice in resolved runtime packs." />
+    <Error Condition="'@(_RuntimeThirdParty)' == ''" Text="Missing required SDK runtime THIRD-PARTY-NOTICES in resolved runtime packs." />
+  </Target>
+
+  <Target Name="ValidatePublishedRuntimeNotices" AfterTargets="Publish" Condition="'$(SelfContained)' == 'true'">
+    <ItemGroup>
+      <_PublishedLicense Include="$(PublishDir)notices\runtime\**\*LICENSE*" />
+      <_PublishedThirdParty Include="$(PublishDir)notices\runtime\**\*THIRD-PARTY-NOTICES*;$(PublishDir)notices\runtime\**\*ThirdPartyNotices*" />
+    </ItemGroup>
+    <Error Condition="'@(_PublishedLicense)' == ''" Text="Published output is missing required SDK runtime LICENSE file in notices\runtime." />
+    <Error Condition="'@(_PublishedThirdParty)' == ''" Text="Published output is missing required SDK runtime THIRD-PARTY-NOTICES file in notices\runtime." />
+  </Target>
 </Project>

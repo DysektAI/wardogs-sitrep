@@ -33,19 +33,13 @@ public static class GeoMath
             rejectionReason = "ZERO_RANGE";
             return false;
         }
-        double bearing = Math.Atan2(dx, dy) * 180.0 / Math.PI;
-        bearing %= 360.0;
-        if (bearing < 0)
-        {
-            bearing += 360.0;
-        }
-        if (bearing >= 360.0)
-        {
-            bearing -= 360.0;
-        }
-        bearingDegrees = bearing;
+        bearingDegrees = NormalizeBearing(Math.Atan2(dx, dy) * 180.0 / Math.PI);
         return true;
     }
+
+    public static string FormatBearing(double degrees) =>
+        NormalizeBearing(Math.Round(degrees, 1, MidpointRounding.AwayFromZero))
+            .ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "°";
 
     public static double NormalizeBearing(double degrees)
     {
@@ -58,6 +52,6 @@ public static class GeoMath
         {
             b -= 360.0;
         }
-        return b;
+        return b == 0 ? 0 : b; // Canonicalize negative zero before formatting.
     }
 }

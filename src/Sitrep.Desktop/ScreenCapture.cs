@@ -1,93 +1,80 @@
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using Sitrep.Core;
 
 namespace Sitrep.Desktop;
-
-public sealed record CapturedFrame(Bitmap Image, int CursorX, int CursorY, CaptureRegion Roi, long ForegroundHwnd, DateTimeOffset EventTime);
 
 public static class ScreenCapture
 {
     public static CaptureRegion BuildRoi(int cursorX, int cursorY, AppConfig cfg) =>
         RoiBuilder.BuildCursorRelative(cursorX, cursorY, cfg.RoiWidth, cfg.RoiHeight, cfg.RoiOffsetX, cfg.RoiOffsetTop);
 
-    public static CapturedFrame? CaptureCursorRegion(int cursorX, int cursorY, CaptureRegion roi, IntPtr foregroundHwnd, IReadOnlyList<CaptureRegion> exclude)
+    public static Bitmap? CaptureRegion(CaptureRegion roi, CaptureRegion? bounds, IReadOnlyList<CaptureRegion> exclude)
     {
-        if (roi.IsEmpty)
+        if (!RoiBuilder.IsSafeCapture(roi, bounds, exclude))
         {
             return null;
         }
-        foreach (var ex in exclude)
-        {
-            if (RoiBuilder.Overlaps(roi, ex))
-            {
-                return null;
-            }
-        }
+        var bmp = new Bitmap(roi.Width, roi.Height, PixelFormat.Format32bppArgb);
         try
         {
-            var bmp = new Bitmap(roi.Width, roi.Height, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.CopyFromScreen(roi.X, roi.Y, 0, 0, new Size(roi.Width, roi.Height), CopyPixelOperation.SourceCopy);
-            }
-            return new CapturedFrame(bmp, cursorX, cursorY, roi, foregroundHwnd.ToInt64(), DateTimeOffset.UtcNow);
+            using var g = Graphics.FromImage(bmp);
+            g.CopyFromScreen(roi.X, roi.Y, 0, 0, new Size(roi.Width, roi.Height), CopyPixelOperation.SourceCopy);
+            return bmp;
         }
         catch
         {
-            return null;
+            bmp.Dispose();
+            throw;
         }
     }
 
+    // Borrows src; caller owns the returned bitmap. No per-pixel GDI calls or hidden source disposal.
     public static Bitmap PreprocessForOcr(Bitmap src, bool threshold)
     {
-        int scale = 2;
-        var scaled = new Bitmap(src.Width * scale, src.Height * scale, PixelFormat.Format32bppArgb);
+        using var scaled = new Bitmap(src.Width * 2, src.Height * 2, PixelFormat.Format32bppArgb);
         using (var g = Graphics.FromImage(scaled))
         {
             g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
             g.DrawImage(src, 0, 0, scaled.Width, scaled.Height);
         }
-        var outBmp = new Bitmap(scaled.Width + 20, scaled.Height + 20, PixelFormat.Format32bppArgb);
-        using (var g = Graphics.FromImage(outBmp))
+        var output = new Bitmap(scaled.Width + 20, scaled.Height + 20, PixelFormat.Format32bppArgb);
+        try
         {
-            g.Clear(Color.Black);
-            g.DrawImage(scaled, 10, 10);
-        }
-        scaled.Dispose();
-        if (!threshold)
-        {
-            return ToGrayscale(outBmp);
-        }
-        var gray = ToGrayscale(outBmp);
-        var thr = new Bitmap(gray.Width, gray.Height, PixelFormat.Format32bppArgb);
-        for (int y = 0; y < gray.Height; y++)
-        {
-            for (int x = 0; x < gray.Width; x++)
+            using (var g = Graphics.FromImage(output))
             {
-                Color c = gray.GetPixel(x, y);
-                int v = c.R > 140 ? 255 : 0;
-                thr.SetPixel(x, y, Color.FromArgb(v, v, v));
+                g.Clear(Color.Black);
+                g.DrawImageUnscaled(scaled, 10, 10);
             }
-        }
-        gray.Dispose();
-        outBmp.Dispose();
-        return thr;
-    }
-
-    private static Bitmap ToGrayscale(Bitmap src)
-    {
-        var dst = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppArgb);
-        for (int y = 0; y < src.Height; y++)
-        {
-            for (int x = 0; x < src.Width; x++)
+            var data = output.LockBits(new Rectangle(0, 0, output.Width, output.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            try
             {
-                Color c = src.GetPixel(x, y);
-                int lum = (299 * c.R + 587 * c.G + 114 * c.B) / 1000;
-                dst.SetPixel(x, y, Color.FromArgb(c.A, lum, lum, lum));
+                byte[] row = new byte[output.Width * 4];
+                for (int y = 0; y < output.Height; y++)
+                {
+                    var address = IntPtr.Add(data.Scan0, y * data.Stride);
+                    Marshal.Copy(address, row, 0, row.Length);
+                    for (int x = 0; x < row.Length; x += 4)
+                    {
+                        int lum = (299 * row[x + 2] + 587 * row[x + 1] + 114 * row[x]) / 1000;
+                        int binary = lum > 140 ? 255 : 0;
+                        byte value = (byte)(threshold ? binary : lum);
+                        row[x] = row[x + 1] = row[x + 2] = value;
+                    }
+                    Marshal.Copy(row, 0, address, row.Length);
+                }
             }
+            finally
+            {
+                output.UnlockBits(data);
+            }
+            return output;
         }
-        src.Dispose();
-        return dst;
+        catch
+        {
+            output.Dispose();
+            throw;
+        }
     }
 }

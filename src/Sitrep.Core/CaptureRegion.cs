@@ -33,6 +33,10 @@ public static class RoiBuilder
         return new CaptureRegion(x1, y1, x2 - x1, y2 - y1);
     }
 
+    public static bool IsSafeCapture(CaptureRegion roi, CaptureRegion? bounds, IReadOnlyList<CaptureRegion> exclude) =>
+        !roi.IsEmpty && bounds.HasValue && Intersect(roi, bounds.Value) == roi
+        && !exclude.Any(ex => Overlaps(roi, ex));
+
     public static bool Overlaps(CaptureRegion a, CaptureRegion b) =>
         a.X < b.X + b.Width && b.X < a.X + a.Width && a.Y < b.Y + b.Height && b.Y < a.Y + a.Height;
 }

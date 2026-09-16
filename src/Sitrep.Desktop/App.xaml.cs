@@ -12,10 +12,15 @@ public partial class App : Application
     private InputMonitor? _input;
     private OcrEngine? _ocr;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         string[] args = e.Args;
+        if (args.Contains("--integration-test"))
+        {
+            Shutdown(await IntegrationChecks.RunAsync());
+            return;
+        }
         if (args.Contains("--self-test"))
         {
             int code = RunSelfTest();
@@ -66,20 +71,42 @@ public partial class App : Application
         error = string.Empty;
         string dir = Path.IsPathRooted(cfg.TessDataDir) ? cfg.TessDataDir : Path.Combine(BaseDir, cfg.TessDataDir);
         var ocr = new OcrEngine(dir);
-        if (!ocr.TryInit(out error))
-        {
-            return ocr;
-        }
+        ocr.TryInit(out error);
         return ocr;
+    }
+
+    internal static AppConfig? LoadInteractiveConfig(Action<string> reportError, string? path = null)
+    {
+        try
+        {
+            return AppConfig.Load(path);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            reportError(ex.Message);
+            return null;
+        }
     }
 
     private void RunInteractive()
     {
-        var config = AppConfig.Load();
-        config.Save();
+        var config = LoadInteractiveConfig(message =>
+            MessageBox.Show(message, "SITREP startup error", MessageBoxButton.OK, MessageBoxImage.Error));
+        if (config is null)
+        {
+            Shutdown(1);
+            return;
+        }
         FiringTable? table = LoadTable(out string tableError);
         _ocr = CreateOcr(config, out string ocrError);
         string startupError = string.Join(" ", new[] { tableError, ocrError }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        if (!string.IsNullOrWhiteSpace(startupError))
+        {
+            _ocr.Dispose();
+            MessageBox.Show(startupError, "SITREP startup error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
         var state = new AssistantState(table, liveEnabled: false);
         _service = new AssistantService(state, _ocr, config);
         _input = new InputMonitor();
@@ -100,9 +127,12 @@ public partial class App : Application
     {
         try
         {
-            var config = AppConfig.Load();
-            string dir = Path.IsPathRooted(config.TessDataDir) ? config.TessDataDir : Path.Combine(BaseDir, config.TessDataDir);
-            using var ocr = new OcrEngine(dir);
+            if (LoadTable(out string tableError) is null)
+            {
+                Console.WriteLine($"SELF-TEST FAIL: {tableError}");
+                return 1;
+            }
+            using var ocr = new OcrEngine(Path.Combine(BaseDir, "tessdata"));
             if (!ocr.TryInit(out string err))
             {
                 Console.WriteLine($"SELF-TEST FAIL (dependency smoke): {err}");
@@ -117,7 +147,7 @@ public partial class App : Application
             }
             var result = RecognitionPipeline.Recognize(bmp, ocr);
             Console.WriteLine($"SELF-TEST (dependency smoke): engine=ok raw='{result.RawText.Trim()}' parsed={result.Success}");
-            return 0;
+            return result.Success && result.Coordinate == new MapCoordinate(101.53, 107.77) ? 0 : 2;
         }
         catch (Exception ex)
         {
@@ -135,9 +165,7 @@ public partial class App : Application
                 Console.WriteLine("DIAGNOSE FAIL: missing image file.");
                 return 1;
             }
-            var config = AppConfig.Load();
-            string dir = Path.IsPathRooted(config.TessDataDir) ? config.TessDataDir : Path.Combine(BaseDir, config.TessDataDir);
-            using var ocr = new OcrEngine(dir);
+            using var ocr = new OcrEngine(Path.Combine(BaseDir, "tessdata"));
             if (!ocr.TryInit(out string err))
             {
                 Console.WriteLine($"DIAGNOSE FAIL: {err}");
@@ -147,10 +175,11 @@ public partial class App : Application
             if (!string.IsNullOrWhiteSpace(cropArg))
             {
                 var parts = cropArg.Split(',').Select(int.Parse).ToArray();
-                if (parts.Length == 4)
+                if (parts.Length != 4)
                 {
-                    crop = new Core.CaptureRegion(parts[0], parts[1], parts[2], parts[3]);
+                    throw new ArgumentException("--crop requires x,y,width,height.");
                 }
+                crop = new Core.CaptureRegion(parts[0], parts[1], parts[2], parts[3]);
             }
             var result = RecognitionPipeline.RecognizeImageFile(imagePath, ocr, crop);
             var report = new

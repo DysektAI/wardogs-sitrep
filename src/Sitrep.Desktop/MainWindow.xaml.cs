@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     private readonly AppConfig _config;
     private readonly OverlayWindow _overlay;
     private readonly string _startupError;
+    private readonly ForegroundSession _foreground;
 
     public MainWindow(AssistantService service, InputMonitor input, AppConfig config, OverlayWindow overlay, string startupError)
     {
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
         _config = config;
         _overlay = overlay;
         _startupError = startupError;
+        _foreground = new ForegroundSession(service.State);
         InitializeComponent();
         _service.Changed += OnServiceChanged;
         _input.F8Pressed += OnF8;
@@ -26,6 +28,7 @@ public partial class MainWindow : Window
         _input.F9Pressed += OnClear;
         _input.F10Pressed += OnToggle;
         _input.MiddleClicked += OnMiddle;
+        _input.Poll += ObserveForeground;
         Closed += (_, __) => Application.Current.Shutdown();
         Refresh();
     }
@@ -48,88 +51,92 @@ public partial class MainWindow : Window
 
     private System.Drawing.Bitmap? CaptureFor(CaptureRequest req)
     {
-        if (!TryAnchor(out _, out int cx, out int cy))
+        var hwnd = new IntPtr(req.ForegroundHwnd);
+        if (Win32.GetForegroundWindow() != hwnd || !_service.IsForegroundAllowed(hwnd))
         {
             return null;
         }
-        var roi = ScreenCapture.BuildRoi(cx, cy, _config);
-        var excludes = new List<CaptureRegion>();
-        try
-        {
-            var r = _overlay.GetScreenRect();
-            excludes.Add(new CaptureRegion(r.X, r.Y, r.Width, r.Height));
-        }
-        catch
-        {
-        }
-        var frame = ScreenCapture.CaptureCursorRegion(cx, cy, roi, Win32.GetForegroundWindow(), excludes);
-        if (frame is null)
-        {
-            return null;
-        }
-        return frame.Image;
+        var roi = new CaptureRegion(req.RoiX, req.RoiY, req.RoiWidth, req.RoiHeight);
+        var bounds = Win32.GetCaptureBounds(hwnd, req.CursorX, req.CursorY);
+        var excludes = GetVisibleExclusions();
+        return ScreenCapture.CaptureRegion(roi, bounds, excludes);
     }
 
-    private void GuardedOrigin()
+    internal static CaptureRegion[] GetVisibleExclusions() =>
+        Application.Current?.Windows.Cast<Window>()
+            .Where(w => w.IsVisible)
+            .Select(w => Win32.GetScreenRegion(new System.Windows.Interop.WindowInteropHelper(w).Handle))
+            .ToArray() ?? [];
+
+    private void GuardedCapture(CaptureRole role)
     {
-        if (!TryAnchor(out var hwnd, out int cx, out int cy))
+        if (!_service.State.LiveEnabled || !TryAnchor(out var hwnd, out int cx, out int cy))
         {
             return;
         }
-        if (hwnd == IntPtr.Zero)
+        ObserveForeground();
+        if (!_foreground.IsForeground)
         {
-            _service.State.OnGameWindowClosed();
-            Refresh();
             return;
         }
-        if (!_service.IsForegroundAllowed(hwnd))
-        {
-            _service.State.OnForegroundLost();
-            Refresh();
-            return;
-        }
-        _service.RequestOrigin(hwnd, cx, cy, CaptureFor);
+        _service.Request(role, hwnd, cx, cy, CaptureFor);
     }
 
-    private void GuardedTarget()
+    private IntPtr _lastForeground;
+
+    private void ObserveForeground()
     {
-        if (!TryAnchor(out var hwnd, out int cx, out int cy))
+        var hwnd = Win32.GetForegroundWindow();
+        if (hwnd != _lastForeground)
         {
-            return;
+            _lastForeground = hwnd;
+            _input.ResetEdges();
         }
-        if (hwnd == IntPtr.Zero)
+        if (_foreground.Observe(hwnd.ToInt64(), _service.IsForegroundAllowed(hwnd), h => Win32.IsWindow(new IntPtr(h))))
         {
-            _service.State.OnGameWindowClosed();
+            _service.DiscardPending();
             Refresh();
-            return;
         }
-        if (!_service.IsForegroundAllowed(hwnd))
-        {
-            _service.State.OnForegroundLost();
-            Refresh();
-            return;
-        }
-        _service.RequestTarget(hwnd, cx, cy, CaptureFor);
     }
 
-    private void OnF8() => Dispatcher.BeginInvoke(GuardedOrigin);
-    private void OnF7() => Dispatcher.BeginInvoke(GuardedTarget);
-    private void OnMiddle() => Dispatcher.BeginInvoke(GuardedTarget);
-    private void OnClear() => Dispatcher.BeginInvoke(() => { _service.State.Clear(); Refresh(); });
-    private void OnToggle() => Dispatcher.BeginInvoke(() =>
+    private void OnF8() => GuardedCapture(CaptureRole.Origin);
+    private void OnF7() => GuardedCapture(CaptureRole.Target);
+    private void OnMiddle() => GuardedCapture(CaptureRole.Target);
+    private void OnClear()
     {
-        _service.State.SetLiveEnabled(!_service.State.LiveEnabled);
-        _input.SetEnabled(_service.State.LiveEnabled);
+        _service.State.Clear();
+        _service.DiscardPending();
         Refresh();
-    });
+    }
+
+    private void OnToggle()
+    {
+        if (!string.IsNullOrWhiteSpace(_startupError) || OwnedWindows.OfType<SettingsWindow>().Any(w => w.IsVisible))
+        {
+            return;
+        }
+        _service.State.SetLiveEnabled(!_service.State.LiveEnabled);
+        _service.DiscardPending();
+        _input.SetEnabled(_service.State.LiveEnabled);
+        ObserveForeground();
+        Refresh();
+    }
 
     private void EnableButton_Click(object sender, RoutedEventArgs e) => OnToggle();
     private void ClearButton_Click(object sender, RoutedEventArgs e) => OnClear();
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        _service.State.SetLiveEnabled(false);
+        _service.DiscardPending();
+        _input.SetEnabled(false);
+        Refresh();
         var settings = new SettingsWindow(_config, _overlay) { Owner = this };
-        settings.ShowDialog();
+        if (settings.ShowDialog().GetValueOrDefault())
+        {
+            _foreground.Reset();
+        }
+        ObserveForeground();
         Refresh();
     }
 
@@ -169,22 +176,29 @@ public partial class MainWindow : Window
         ElevationValue.Text = s.ElevationMil.HasValue ? $"{s.ElevationMil.Value:0.0}" : "—";
         ElevationValue.Foreground = level == StatusLevel.Success ? StatusLevelMapper.BrushFor(StatusLevel.Success) : ThemeBrush("TextBrush");
         RangeValue.Text = s.RangeMeters.HasValue ? $"{s.RangeMeters.Value:0.0} m" : "—";
-        BearingValue.Text = s.BearingDegrees.HasValue ? $"{s.BearingDegrees.Value:0.0}°" : "—";
+        BearingValue.Text = s.BearingDegrees.HasValue ? GeoMath.FormatBearing(s.BearingDegrees.Value) : "—";
         OriginValue.Text = s.ConfirmedOrigin.HasValue ? $"x {s.ConfirmedOrigin.Value.X:0.00}  y {s.ConfirmedOrigin.Value.Y:0.00}" : "—";
         TargetValue.Text = s.ActiveTarget.HasValue ? $"x {s.ActiveTarget.Value.X:0.00}  y {s.ActiveTarget.Value.Y:0.00}" : "—";
 
         EnableButton.Content = s.LiveEnabled ? "Disable live" : "Enable live";
         ClearButton.IsEnabled = s.ConfirmedOrigin.HasValue || s.ActiveTarget.HasValue || s.Pending is not null;
 
-        string overlay = status;
+        EnableButton.IsEnabled = !hasStartupError;
+        if (s.LiveEnabled && !_foreground.IsForeground)
+        {
+            _overlay.Hide();
+            return;
+        }
+        string overlay = $"L81 · uncorrected table\n{status}";
         if (s.RangeMeters.HasValue && s.BearingDegrees.HasValue)
         {
-            overlay += $" | {s.RangeMeters.Value:0.0}m {s.BearingDegrees.Value:0.0}°";
+            overlay += $" | {s.RangeMeters.Value:0.0}m {GeoMath.FormatBearing(s.BearingDegrees.Value)}";
         }
         if (s.ElevationMil.HasValue)
         {
             overlay += $" | {s.ElevationMil.Value:0.0} MIL";
         }
+        overlay += $"\nOrigin {OriginValue.Text}\nTarget {TargetValue.Text}";
         _overlay.ShowText(overlay, level);
     }
 }

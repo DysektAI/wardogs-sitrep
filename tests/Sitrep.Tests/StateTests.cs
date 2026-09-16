@@ -72,6 +72,43 @@ public sealed class StateTests
     }
 
     [Fact]
+    public void TargetDuringOriginReplacementCannotUseOldOriginOrSupersedeReplacement()
+    {
+        var s = new AssistantState(SmallTable());
+        var first = s.BeginOrigin(1, 0, 0, 0, 0, 10, 10);
+        Assert.True(s.Complete(Ok(first, new MapCoordinate(100, 100))));
+        var replacement = s.BeginOrigin(1, 50, 60, 10, 20, 30, 40);
+        Assert.Null(s.ConfirmedOrigin);
+        var (target, status) = s.BeginTarget(1, 0, 0, 0, 0, 10, 10);
+        Assert.Null(target);
+        Assert.Equal(DisplayStatuses.SetMortar, status);
+        Assert.Same(replacement, s.Pending);
+        Assert.Equal(DisplayStatuses.Reading, s.Status);
+        Assert.True(s.Complete(Ok(replacement, new MapCoordinate(200, 200))));
+        Assert.Equal(new MapCoordinate(200, 200), s.ConfirmedOrigin);
+        Assert.Null(s.ElevationMil);
+    }
+
+    [Theory]
+    [InlineData(CaptureRole.Origin)]
+    [InlineData(CaptureRole.Target)]
+    public void WindowClosureDiscardsCompletionAndOrigin(CaptureRole role)
+    {
+        var s = new AssistantState(SmallTable());
+        var req = s.BeginOrigin(1, 0, 0, 0, 0, 10, 10);
+        if (role == CaptureRole.Target)
+        {
+            s.Complete(Ok(req, new MapCoordinate(100, 100)));
+            req = s.BeginTarget(1, 0, 0, 0, 0, 10, 10).Request!;
+        }
+        s.OnGameWindowClosed();
+        Assert.False(s.Complete(Ok(req, new MapCoordinate(101, 102))));
+        Assert.Null(s.ConfirmedOrigin);
+        Assert.Null(s.Pending);
+        Assert.Null(s.ElevationMil);
+    }
+
+    [Fact]
     public void OriginFailureRequiresFreshF8()
     {
         var s = new AssistantState(SmallTable());
@@ -98,6 +135,24 @@ public sealed class StateTests
         Assert.StartsWith("TARGET OCR FAILED", s.Status);
     }
 
+    [Theory]
+    [InlineData(CaptureRole.Origin)]
+    [InlineData(CaptureRole.Target)]
+    public void MovementDisplaysSpecificStatusWithoutActionableSolution(CaptureRole role)
+    {
+        var s = new AssistantState(SmallTable());
+        var origin = s.BeginOrigin(1, 0, 0, 0, 0, 10, 10);
+        s.Complete(Ok(origin, new MapCoordinate(100, 100)));
+        var request = role == CaptureRole.Origin
+            ? s.BeginOrigin(1, 0, 0, 0, 0, 10, 10)
+            : s.BeginTarget(1, 0, 0, 0, 0, 10, 10).Request!;
+        Assert.True(s.Complete(Fail(request, DisplayStatuses.Moved)));
+        Assert.Equal(DisplayStatuses.Moved, s.Status);
+        Assert.Equal(role == CaptureRole.Target, s.ConfirmedOrigin.HasValue);
+        Assert.Null(s.Pending);
+        Assert.Null(s.ElevationMil);
+    }
+
     [Fact]
     public void ClearDiscardsPending()
     {
@@ -106,7 +161,7 @@ public sealed class StateTests
         s.Clear();
         Assert.False(s.Complete(Ok(oReq, new MapCoordinate(100, 100))));
         Assert.Null(s.ConfirmedOrigin);
-        Assert.Equal(DisplayStatuses.Cleared, s.Status);
+        Assert.Equal(DisplayStatuses.SetMortar, s.Status);
     }
 
     [Fact]

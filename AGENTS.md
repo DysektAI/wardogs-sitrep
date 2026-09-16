@@ -12,8 +12,9 @@ pwsh -ExecutionPolicy Bypass -File scripts/verify.ps1        # canonical gate: l
 ```
 
 - Single test: `dotnet test tests/Sitrep.Tests -c Release --filter "FullyQualifiedName~GeoMath"`
-- Publish: `scripts/publish.ps1` → `out/SitrepAssist-win-x64/` + `.zip` (gitignored). Test the published exe, not just `dotnet run`, and from an unrelated CWD.
-- Diagnostics (live `RecognitionPipeline`, exit 2 on OCR reject): `SitrepAssist.exe --self-test` (dependency smoke only, not accuracy proof); `SitrepAssist.exe --diagnose-image <png> --crop x,y,w,h --report out.json` (known-good crops in `docs/VALIDATION.md`).
+- Publish: `scripts/publish.ps1` → `out/Sitrep-win-x64/` + `.zip` (gitignored). Test the published exe, not just `dotnet run`, and from an unrelated CWD.
+- Diagnostics (live `RecognitionPipeline`, exit 2 on OCR reject): `Sitrep.exe --self-test` (dependency smoke only, not accuracy proof); `Sitrep.exe --diagnose-image <png> --crop x,y,w,h --report out.json` (known-good crops in `docs/VALIDATION.md`). Use `Invoke-PackagedCheck` from `scripts/common.ps1` to wait for this WinExe and enforce its exit code.
+- `scripts/verify.ps1` runs public clean-clone checks; add `-PrivateFixtures` to also verify the two gitignored user screenshots. `--integration-test` runs packaged orchestration/Win32 regressions, not real-game validation.
 
 ## Structure
 
@@ -24,7 +25,7 @@ pwsh -ExecutionPolicy Bypass -File scripts/verify.ps1        # canonical gate: l
 
 ## Gotchas
 
-- Bundled data: `AppContext.BaseDirectory` (`data/`, `tessdata/`). Writable: `%LocalAppData%/SitrepAssist/` (`config.json`, `captures/`, 50 files max). Missing model/data must fail startup with one actionable error — never silent download or plausible output.
+- Bundled data: `AppContext.BaseDirectory` (`data/`, `tessdata/`). Writable: `%LocalAppData%/Sitrep/` (`config.json`, `captures/`, 50 files max). Missing model/data must fail startup with one actionable error — never silent download or plausible output.
 - Config defaults: `ForegroundTitleContains=""` leaves capture disabled; live starts disabled. Keys: F8 origin, F7/MMB target (same pipeline), F9 clear, F10 enable/disable. Closing control window must exit overlay/workers.
 - State: invalidate solution at request start (`READING`); origin failure leaves no usable origin; target failure keeps origin but kills target/solution (`TARGET OCR FAILED`); F9/disable/foreground-loss/origin-replace discard pending work (generation/revision guards — stale OCR completions never commit). One OCR worker, newest request only, off UI thread.
 - Parser: strict — invariant culture, 2 fractional digits, full token boundaries; reject partial/conflicting/missing-axis; no letter→digit repair, no invented decimals or bounds.
