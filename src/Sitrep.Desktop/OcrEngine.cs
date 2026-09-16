@@ -1,5 +1,5 @@
 using System.Drawing;
-using System.Drawing.Imaging;
+using ImageFormat = System.Drawing.Imaging.ImageFormat;
 using System.IO;
 using Tesseract;
 
@@ -33,7 +33,6 @@ public sealed class OcrEngine : IDisposable
                 return false;
             }
             _engine = new TesseractEngine(TessDataPath, "eng", EngineMode.LstmOnly);
-            _engine.SetVariable("tessedit_pageseg_mode", "11");
             _engine.SetVariable("tessedit_char_whitelist", "xyXY0123456789., ");
             return true;
         }
@@ -45,34 +44,23 @@ public sealed class OcrEngine : IDisposable
         }
     }
 
-    public OcrOutput Recognize(Bitmap image)
+    public IReadOnlyList<OcrOutput> Recognize(Bitmap image)
     {
         if (_engine is null)
         {
-            return new OcrOutput(string.Empty, 0, false);
+            return [new OcrOutput(string.Empty, 0, false)];
         }
-        string best = string.Empty;
-        float bestConf = 0;
+        var outputs = new List<OcrOutput>();
         foreach (bool threshold in new[] { false, true })
         {
-            using var pre = ScreenCapture.PreprocessForOcr((Bitmap)image.Clone(), threshold);
+            using var pre = ScreenCapture.PreprocessForOcr(image, threshold);
             using var ms = new MemoryStream();
-            pre.Save(ms, System.Drawing.Imaging.ImageFormat.Bmp);
+            pre.Save(ms, ImageFormat.Bmp);
             using var pix = Pix.LoadFromMemory(ms.ToArray());
             using var page = _engine.Process(pix, PageSegMode.SparseText);
-            string text = page.GetText() ?? string.Empty;
-            float conf = page.GetMeanConfidence();
-            if (text.Length > best.Length)
-            {
-                best = text;
-                bestConf = conf;
-            }
-            if (!string.IsNullOrWhiteSpace(text) && text.Contains('.'))
-            {
-                break;
-            }
+            outputs.Add(new OcrOutput(page.GetText() ?? string.Empty, page.GetMeanConfidence(), true));
         }
-        return new OcrOutput(best, bestConf, true);
+        return outputs;
     }
 
     public void Dispose()

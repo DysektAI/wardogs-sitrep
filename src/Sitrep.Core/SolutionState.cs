@@ -36,7 +36,6 @@ public static class DisplayStatuses
     public const string Reading = "READING";
     public const string OriginSet = "ORIGIN SET—AWAITING TARGET";
     public const string Ready = "READY";
-    public const string Cleared = "SET MORTAR WITH F8";
     public const string Disabled = "DISABLED";
     public const string WindowLost = "WINDOW LOST—RETARGET";
     public const string Moved = "MOVED—TRY AGAIN";
@@ -111,6 +110,7 @@ public sealed class AssistantState
         {
             _originRevision++;
             _generation++;
+            ConfirmedOrigin = null;
             ActiveTarget = null;
             RangeMeters = null;
             BearingDegrees = null;
@@ -175,7 +175,8 @@ public sealed class AssistantState
                     RangeMeters = null;
                     BearingDegrees = null;
                     ElevationMil = null;
-                    Status = DisplayStatuses.OriginFailed(completion.RejectionReason);
+                    Status = completion.RejectionReason == DisplayStatuses.Moved
+                        ? DisplayStatuses.Moved : DisplayStatuses.OriginFailed(completion.RejectionReason);
                     return true;
                 }
                 ConfirmedOrigin = completion.Coordinate;
@@ -194,7 +195,8 @@ public sealed class AssistantState
                     RangeMeters = null;
                     BearingDegrees = null;
                     ElevationMil = null;
-                    Status = DisplayStatuses.TargetFailed(completion.RejectionReason);
+                    Status = completion.RejectionReason == DisplayStatuses.Moved
+                        ? DisplayStatuses.Moved : DisplayStatuses.TargetFailed(completion.RejectionReason);
                     return true;
                 }
                 if (!ConfirmedOrigin.HasValue)
@@ -251,7 +253,7 @@ public sealed class AssistantState
             RangeMeters = null;
             BearingDegrees = null;
             ElevationMil = null;
-            Status = DisplayStatuses.Cleared;
+            Status = DisplayStatuses.SetMortar;
         }
     }
 

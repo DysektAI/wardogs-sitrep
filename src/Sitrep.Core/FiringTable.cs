@@ -11,7 +11,7 @@ public sealed class FiringTable
     public double MaxRangeMeters { get; }
     public IReadOnlyList<FiringSample> Samples { get; }
 
-    public FiringTable(string weaponId, double minRangeMeters, double maxRangeMeters, IEnumerable<FiringSample> samples)
+    private FiringTable(string weaponId, double minRangeMeters, double maxRangeMeters, IEnumerable<FiringSample> samples)
     {
         WeaponId = weaponId;
         MinRangeMeters = minRangeMeters;
@@ -29,7 +29,7 @@ public sealed class FiringTable
         {
             return (null, "INVALID_LIMITS");
         }
-        var ordered = samples.OrderBy(s => s.RangeMeters).ToList();
+        var ordered = samples.ToList();
         if (ordered.Count < 2)
         {
             return (null, "TOO_FEW_SAMPLES");
@@ -117,11 +117,19 @@ public sealed class FiringTable
             List<FiringSample> samples = new();
             foreach (var el in root.GetProperty("samples").EnumerateArray())
             {
+                if (el.ValueKind != JsonValueKind.Array || el.GetArrayLength() != 2)
+                {
+                    return (null, "CORRUPT_DATA");
+                }
                 samples.Add(new FiringSample(el[0].GetDouble(), el[1].GetDouble()));
+            }
+            if (weaponId != "L81" || minRange != 132 || maxRange != 684)
+            {
+                return (null, "CORRUPT_DATA");
             }
             return TryCreate(weaponId, minRange, maxRange, samples);
         }
-        catch (Exception ex) when (ex is IOException or JsonException or KeyNotFoundException)
+        catch (Exception ex) when (ex is IOException or JsonException or KeyNotFoundException or InvalidOperationException or FormatException or UnauthorizedAccessException)
         {
             return (null, "CORRUPT_DATA");
         }
