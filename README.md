@@ -3,7 +3,9 @@
 Windows/C# helper: F8 sets mortar origin, middle-click/F7 captures target from visible map coordinates, shows range, bearing, and source-backed L81 MIL (uncorrected table).
 
 ## Controls
-- F8: capture origin. F7 or middle-click: capture target. F9: clear. F10: enable/disable live (starts disabled).
+- F8: capture origin. F7 or middle-click: capture target. F9: clear. F10: disable live. Live starts disabled; use the Enable live button to start (hotkeys are only polled while live capture is on).
+- Control window: live-state pill, firing-solution card (elevation, range, bearing, origin/target), startup warning banner, and Enable / Clear / Settings / Exit buttons.
+- Settings window: game window title match, desktop test mode, capture region (ROI), overlay position reset, debug captures. Validated on Save and written to config.json.
 
 ## Baseline
 - .NET 10, WPF, Windows 11 x64, borderless/windowed, SDR. Other modes unverified.
@@ -12,8 +14,8 @@ Windows/C# helper: F8 sets mortar origin, middle-click/F7 captures target from v
 1. `pwsh -ExecutionPolicy Bypass -File scripts/setup-model.ps1`
 2. `dotnet build Sitrep.slnx -c Release`
 3. `src/Sitrep.Desktop/bin/Release/net10.0-windows/win-x64/Sitrep.exe`
-- Two windows appear by design: the control window (buttons, status, Exit) and a semi-transparent always-on-top overlay readout for use over the game. The overlay is click-through so it cannot hold buttons — that is why they are separate. Closing the control window exits everything.
-- Exit via control window Exit (kills overlay/workers). Config: %LocalAppData%/Sitrep/config.json. Set ForegroundTitleContains to your game window title; empty leaves capture disabled. Overlay position: OverlayLeft/OverlayTop in config (defaults to top-right). Debug captures: %LocalAppData%/Sitrep/captures (50 files max).
+- Two windows appear by design: the control window (status, firing solution, buttons) and a semi-transparent always-on-top overlay readout for use over the game. The overlay is click-through so it cannot hold buttons — that is why they are separate. Closing the control window exits everything.
+- Exit via control window Exit (kills overlay/workers). Config: %LocalAppData%/Sitrep/config.json — edit it via the Settings window or by hand. Set ForegroundTitleContains to your game window title; empty leaves capture disabled. Overlay position: OverlayLeft/OverlayTop in config (defaults to top-right; Settings can reset it). Debug captures: %LocalAppData%/Sitrep/captures (50 files max).
 
 ## Testing without the game (already verified here)
 - `Sitrep.exe --self-test` — dependency smoke: engine loads, synthetic label parses.
