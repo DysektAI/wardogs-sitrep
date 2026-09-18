@@ -57,7 +57,7 @@ Defaults (revision 3; the earlier F8/F7/F10 scheme is superseded):
 |---|---|
 | Ctrl + middle mouse | Capture/re-establish mortar origin |
 | Shift + middle mouse | Capture target |
-| F9 | Clear origin, target, and solution |
+| F9 | Clear origin, target, and solution (only while the game or SITREP's control window is in the foreground) |
 | F8 / F7 | Keyboard aliases for origin / target |
 
 An unmodified middle click is the game's own ping and never triggers SITREP capture. Both triggers use the same capture pipeline; there is no second calculator implementation. Input observation starts enabled, but capture requires a non-SITREP foreground window matching the configured executable substring or optional title fallback, or explicit desktop test mode. Unknown/nonmatching identity blocks capture. When client bounds are known, clicks outside the centered map square reject as `OUTSIDE MAP AREA`; desktop test mode skips this map guard. Unknown bounds do not bypass the capture backend's client/monitor bounds checks. Normal game mouse/keyboard input must not be consumed or synthesized.

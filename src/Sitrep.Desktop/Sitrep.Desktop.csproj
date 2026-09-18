@@ -18,10 +18,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- app.ico is also the PE icon; the WPF copy feeds the tray entry (Shell_NotifyIcon needs an HICON at the window's DPI). -->
     <Resource Include="Assets\app.ico" />
-    <Resource Include="Assets\logo.png" />
     <Resource Include="Assets\logo-64.png" />
-    <Resource Include="Assets\logo-32.png" />
   </ItemGroup>
 
   <ItemGroup>

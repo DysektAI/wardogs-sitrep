@@ -306,6 +306,11 @@ public partial class MainWindow : Window
 
     private void OnClear()
     {
+        if (_closing) { return; }
+        ObserveForeground();
+        // Input is observed globally, so F9 typed into an unrelated application must not discard the origin.
+        // Clear only from the attached game window or from SITREP's own control window (there is no Clear button).
+        if (!_foreground.IsForeground && !Win32.IsOwnWindow(Win32.GetForegroundWindow())) { return; }
         _service.State.Clear();
         _service.DiscardPending();
         Refresh();

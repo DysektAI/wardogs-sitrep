@@ -1,4 +1,6 @@
-# Generates multi-resolution app.ico and UI PNGs from master SITREP.png.
+# Generates multi-resolution Assets/app.ico and Assets/logo-64.png from the master logo.
+# The master (SITREP.png at the repo root, ~1.3 MB) is kept local and gitignored; the generated
+# assets are committed, so this only needs to run again when the master artwork changes.
 param(
   [string]$Source = "$PSScriptRoot/../SITREP.png",
   [string]$DestDir = "$PSScriptRoot/../src/Sitrep.Desktop/Assets"
@@ -35,18 +37,10 @@ try {
     $bmp.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
   }
 
-  # Generate UI logos
-  $logo512 = Resize-Bmp $srcImage 512 512
-  Save-Png $logo512 (Join-Path $DestDir "logo.png")
-  $logo512.Dispose()
-
+  # Header logo badge (MainWindow.xaml). Only assets referenced by the app are generated and embedded.
   $logo64 = Resize-Bmp $srcImage 64 64
   Save-Png $logo64 (Join-Path $DestDir "logo-64.png")
   $logo64.Dispose()
-
-  $logo32 = Resize-Bmp $srcImage 32 32
-  Save-Png $logo32 (Join-Path $DestDir "logo-32.png")
-  $logo32.Dispose()
 
   # Build multi-resolution .ico (16, 24, 32, 48, 64, 128, 256)
   $icoSizes = @(16, 24, 32, 48, 64, 128, 256)
