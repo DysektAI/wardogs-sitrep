@@ -17,7 +17,7 @@ public sealed class InputMonitor : IDisposable
     private bool _disposed;
 
     public event Action<InputGesture>? CapturePressed;
-    public event Action? ClearPressed;
+    public event Action<InputGesture>? ClearPressed;
     public event Action? Invalidated;
     public event Action? Poll;
 
@@ -104,7 +104,7 @@ public sealed class InputMonitor : IDisposable
             }
             if (!hasGesture) { break; }
             if (!IsCurrent(gesture)) { continue; }
-            if (gesture.Action == InputAction.Clear) { InvokeSafely(() => ClearPressed?.Invoke()); }
+            if (gesture.Action == InputAction.Clear) { InvokeSafely(() => ClearPressed?.Invoke(gesture)); }
             else { InvokeSafely(() => CapturePressed?.Invoke(gesture)); }
         }
     }

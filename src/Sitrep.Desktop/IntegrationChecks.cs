@@ -13,6 +13,7 @@ internal static class IntegrationChecks
         try
         {
             CheckInvalidStartupConfig();
+            CheckOcrTokenEvidence();
             CheckPreprocessing();
             CheckWindowBounds();
             CheckUnlockBeforeFirstShow();
@@ -20,6 +21,7 @@ internal static class IntegrationChecks
             CheckDebugRetention();
             CheckProcessIdentityAndMatching();
             await CheckInputDuringBlockedDispatcherAsync();
+            await CheckClearDispatchAsync();
             CheckDelayedInputGuard();
             await CheckSnapshotQueueAsync();
             await CheckRetryMovementAsync();
@@ -82,6 +84,30 @@ internal static class IntegrationChecks
             }
         }
         finally { File.Delete(path); }
+    }
+
+    private static void CheckOcrTokenEvidence()
+    {
+        // Exercise the actual engine and both recipes: text-only parser tests cannot detect OCR filtering
+        // that erases a sign/letter and turns an invalid label into a plausible coordinate.
+        using var ocr = new OcrEngine(Path.Combine(AppContext.BaseDirectory, "tessdata"));
+        Require(ocr.TryInit(out string error), $"OCR evidence regression could not initialize: {error}");
+        foreach (string text in new[] { "x-101.53 y107.77", "x+101.53 y107.77", "ax101.53 y107.77", "x101.53z y107.77", "x101.53 y107.77" })
+        {
+            using var image = new Bitmap(600, 140);
+            using (var graphics = Graphics.FromImage(image))
+            {
+                graphics.Clear(Color.White);
+                using var font = new Font("Consolas", 36, GraphicsUnit.Pixel);
+                graphics.DrawString(text, font, Brushes.Black, 10, 40);
+            }
+            var result = RecognitionPipeline.Recognize(image, ocr);
+            bool valid = text == "x101.53 y107.77";
+            Require(result.Success == valid && (!valid || result.Coordinate == new MapCoordinate(101.53, 107.77)),
+                $"OCR token evidence changed acceptance for '{text}': success={result.Success}, raw='{result.RawText}', rejection={result.RejectionReason}");
+            Require(result.RejectionReason != "OCR_UNAVAILABLE", "OCR evidence regression did not exercise recognition.");
+        }
+        Console.WriteLine("Live OCR signed/letter-glued negatives and positive control checked through both recipes.");
     }
 
     private static void CheckPreprocessing()
@@ -363,6 +389,68 @@ internal static class IntegrationChecks
         input.Dispose();
         await Task.Delay(30);
         Require(received.Count == 2, "Input callback survived disposal.");
+    }
+
+    private static async Task CheckClearDispatchAsync()
+    {
+        // The real sampling thread and WPF timer dispatch run here; only native input reads are substituted.
+        // No SendInput, key messages, hooks, game window, or user configuration is involved.
+        foreach (var (sampledForeground, dispatchForeground, expected) in new[]
+        {
+            (1L, 1L, true), (2L, 2L, true), (3L, 3L, false), (3L, 2L, false), (3L, 1L, false), (1L, 2L, false),
+        })
+        {
+            var idle = new InputSample(sampledForeground, -400, 500, true, false, false, false, false, false, false);
+            var current = new SampleBox(idle);
+            SampleBox? observed = null;
+            using var input = new InputMonitor(() =>
+            {
+                var value = Volatile.Read(ref current);
+                Volatile.Write(ref observed, value);
+                return value.Value;
+            });
+            input.SetEnabled(true);
+            void SampleWhileBlocked(InputSample value)
+            {
+                var next = new SampleBox(value);
+                Volatile.Write(ref current, next);
+                Require(SpinWait.SpinUntil(() => ReferenceEquals(Volatile.Read(ref observed), next), TimeSpan.FromSeconds(5)),
+                    "Clear sample did not reach the independent input thread.");
+                _ = input.IsCurrent(default); // Acquire sampler lock after the read, ensuring enqueue/reset finished.
+            }
+            var received = new List<InputGesture>();
+            input.ClearPressed += received.Add;
+            var pressed = idle with { Clear = true, Control = true };
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            DateTimeOffset eventStart = DateTimeOffset.UtcNow;
+            SampleWhileBlocked(pressed);
+            SampleWhileBlocked(idle with { X = 200 }); // Release F9 and move before the UI can dispatch.
+            long end = System.Diagnostics.Stopwatch.GetTimestamp();
+            DateTimeOffset eventEnd = DateTimeOffset.UtcNow;
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (received.Count == 0 && DateTime.UtcNow < deadline) { await Task.Delay(10); }
+            Require(received.Count == 1, "Frozen clear was not dispatched exactly once.");
+            var clear = received[0];
+            Require(clear.Action == InputAction.Clear && clear.Sample == pressed && input.IsCurrent(clear)
+                && clear.Timestamp >= start && clear.Timestamp <= end && clear.EventTime >= eventStart && clear.EventTime <= eventEnd,
+                "Clear dispatch lost its frozen gesture (foreground, modifiers, cursor, timestamp or epoch).");
+            Require(ClearInputPolicy.IsAllowed(clear, input.IsCurrent(clear), dispatchForeground, 1, true, 2) == expected,
+                "Dispatched clear was authorized using a later foreground or a non-control window.");
+
+            // Retain conservative invalidation: a queued clear must not survive even an away/back focus round-trip.
+            SampleWhileBlocked(pressed);
+            SampleWhileBlocked(idle with { Foreground = 9 });
+            SampleWhileBlocked(idle);
+            var polled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            input.Poll += () => polled.TrySetResult();
+            await polled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Require(received.Count == 1 && !input.IsCurrent(clear), "A stale clear survived a sampled focus round-trip.");
+            SampleWhileBlocked(pressed);
+            input.Dispose();
+            await Task.Delay(30);
+            Require(received.Count == 1, "Clear callback survived disposal.");
+        }
+        Console.WriteLine("Frozen F9 dispatch/policy, sampled focus-reset rejection and disposal checked on the WPF dispatcher.");
     }
 
     private static void CheckDelayedInputGuard()

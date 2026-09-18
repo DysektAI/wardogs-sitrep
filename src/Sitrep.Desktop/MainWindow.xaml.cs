@@ -304,13 +304,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnClear()
+    private void OnClear(Core.InputGesture gesture)
     {
-        if (_closing) { return; }
+        if (_closing || !_input.IsCurrent(gesture)) { return; }
         ObserveForeground();
-        // Input is observed globally, so F9 typed into an unrelated application must not discard the origin.
-        // Clear only from the attached game window or from SITREP's own control window (there is no Clear button).
-        if (!_foreground.IsForeground && !Win32.IsOwnWindow(Win32.GetForegroundWindow())) { return; }
+        // Never retarget a sampled F9 to a later foreground, nor authorize an owned overlay as the control window.
+        // Focus resets still discard queued clears; recheck the epoch after foreground observation as well.
+        if (!ClearInputPolicy.IsAllowed(gesture, _input.IsCurrent(gesture), Win32.GetForegroundWindow().ToInt64(),
+            _foreground.AttachedWindow, _foreground.IsForeground, new WindowInteropHelper(this).Handle.ToInt64())) { return; }
         _service.State.Clear();
         _service.DiscardPending();
         Refresh();
