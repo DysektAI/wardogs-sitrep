@@ -14,7 +14,15 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Sitrep</AssemblyName>
     <RootNamespace>Sitrep.Desktop</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+    <Resource Include="Assets\logo.png" />
+    <Resource Include="Assets\logo-64.png" />
+    <Resource Include="Assets\logo-32.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Tesseract" Version="5.2.0" />
