@@ -448,7 +448,9 @@ public partial class MainWindow : Window
         try
         {
             Directory.CreateDirectory(DebugCaptureStore.DefaultDirectory);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{DebugCaptureStore.DefaultDirectory}\"") { UseShellExecute = true })?.Dispose();
+            // S4036: resolve explorer from the known Windows location rather than relying on PATH lookup.
+            string explorerPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(explorerPath, $"\"{DebugCaptureStore.DefaultDirectory}\"") { UseShellExecute = true })?.Dispose();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {

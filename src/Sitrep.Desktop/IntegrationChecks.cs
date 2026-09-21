@@ -44,6 +44,9 @@ internal static class IntegrationChecks
         if (!condition) { throw new InvalidOperationException(message); }
     }
 
+    // Exact bit-pattern equality for sentinel checks (S1244): integer comparison, so ±0/NaN quirks of `==` cannot apply.
+    private static bool Exactly(double left, double right) => BitConverter.DoubleToInt64Bits(left) == BitConverter.DoubleToInt64Bits(right);
+
     private static void RequireEqual<T>(T expected, T actual, string message)
     {
         Require(EqualityComparer<T>.Default.Equals(expected, actual), message);
@@ -238,7 +241,8 @@ internal static class IntegrationChecks
                 reloaded = AppConfig.Load(path);
             }
             finally { File.Delete(path); }
-            Require(reloaded.OverlayLeft == config.OverlayLeft && reloaded.OverlayTop == config.OverlayTop,
+            Require(Exactly(reloaded.OverlayLeft.GetValueOrDefault(), config.OverlayLeft.GetValueOrDefault())
+                    && Exactly(reloaded.OverlayTop.GetValueOrDefault(), config.OverlayTop.GetValueOrDefault()),
                 "Negative overlay position did not survive config save/load.");
             // Configs written by earlier builds carry the old -1/-1 "unset" sentinel; only that exact pair migrates to null.
             try
@@ -248,7 +252,8 @@ internal static class IntegrationChecks
                 Require(legacy.OverlayLeft is null && legacy.OverlayTop is null, "Legacy -1/-1 overlay sentinel must load as unset.");
                 File.WriteAllText(path, "{\"OverlayLeft\":-1,\"OverlayTop\":-2}");
                 var custom = AppConfig.Load(path);
-                Require(custom.OverlayLeft == -1 && custom.OverlayTop == -2, "Non-sentinel negative position must not be migrated.");
+                Require(Exactly(custom.OverlayLeft.GetValueOrDefault(), -1) && Exactly(custom.OverlayTop.GetValueOrDefault(), -2),
+                    "Non-sentinel negative position must not be migrated.");
             }
             finally { File.Delete(path); }
             restored = new OverlayWindow(reloaded);

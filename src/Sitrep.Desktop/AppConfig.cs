@@ -24,6 +24,9 @@ public sealed class AppConfig
 
     public static string ConfigPath => Path.Combine(ConfigDir, "config.json");
 
+    // Exact bit-pattern equality for sentinel checks (S1244): integer comparison, so ±0/NaN quirks of `==` cannot apply.
+    private static bool Exactly(double left, double right) => BitConverter.DoubleToInt64Bits(left) == BitConverter.DoubleToInt64Bits(right);
+
     public static AppConfig Load(string? path = null)
     {
         path ??= ConfigPath;
@@ -33,7 +36,8 @@ public sealed class AppConfig
             var cfg = JsonSerializer.Deserialize<AppConfig>(json)
                 ?? throw new InvalidDataException("Configuration must be a JSON object.");
             // Earlier builds persisted -1/-1 as "no saved overlay position"; keep those installs on the default placement.
-            if (cfg.OverlayLeft == -1 && cfg.OverlayTop == -1)
+            // Compare bit patterns so only the literal -1 sentinel migrates, not values that merely compare equal to it.
+            if (Exactly(cfg.OverlayLeft.GetValueOrDefault(), -1) && Exactly(cfg.OverlayTop.GetValueOrDefault(), -1))
             {
                 cfg.OverlayLeft = null;
                 cfg.OverlayTop = null;
