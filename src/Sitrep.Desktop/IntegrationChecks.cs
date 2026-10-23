@@ -270,6 +270,17 @@ internal static class IntegrationChecks
             }
             finally { offscreen.Close(); }
 
+            // A saved position near the bottom must keep the whole measured readout on screen, not just MinHeight.
+            var low = new OverlayWindow(new AppConfig { OverlayLeft = 0, OverlayTop = screen.Bottom - offscreen.MinHeight }, screen);
+            try
+            {
+                low.ShowSolution(new AssistantState(null), StatusLevel.Neutral);
+                low.UpdateLayout();
+                Require(low.ActualHeight > low.MinHeight && Math.Abs(low.Top + low.ActualHeight - screen.Bottom) <= 1,
+                    $"Bottom saved position was not clamped by the measured height (top {low.Top}, height {low.ActualHeight}).");
+            }
+            finally { low.Close(); }
+
             // Reset must return to "unset" (null), not to a sentinel, and the default position must be used.
             restored.ResetPosition();
             Require(reloaded.OverlayLeft is null && reloaded.OverlayTop is null && restored.Left >= 0 && restored.Top == 64,

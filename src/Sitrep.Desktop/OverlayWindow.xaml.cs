@@ -25,7 +25,19 @@ public partial class OverlayWindow : Window
         _virtualScreen = virtualScreen;
         InitializeComponent();
         ApplyPosition(config);
+        // SizeToContent="Height" only knows the real height after layout; re-clamp whenever it changes.
+        SizeChanged += (_, e) =>
+        {
+            if (e.HeightChanged)
+            {
+                var screen = VirtualScreen;
+                Top = OverlayPlacement.Clamp(Top, screen.Top, screen.Height, ActualHeight);
+            }
+        };
     }
+
+    private Rect VirtualScreen => _virtualScreen ?? new Rect(SystemParameters.VirtualScreenLeft,
+        SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
 
     public void ApplyPosition(AppConfig config)
     {
@@ -33,10 +45,9 @@ public partial class OverlayWindow : Window
         // clamped to the current virtual screen so a resized overlay or a removed monitor cannot hide the readout.
         if (config.OverlayLeft.HasValue && config.OverlayTop.HasValue)
         {
-            var screen = _virtualScreen ?? new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
-                SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+            var screen = VirtualScreen;
             Left = OverlayPlacement.Clamp(config.OverlayLeft.Value, screen.Left, screen.Width, Width);
-            Top = OverlayPlacement.Clamp(config.OverlayTop.Value, screen.Top, screen.Height, MinHeight);
+            Top = OverlayPlacement.Clamp(config.OverlayTop.Value, screen.Top, screen.Height, Math.Max(MinHeight, ActualHeight));
         }
         else
         {
