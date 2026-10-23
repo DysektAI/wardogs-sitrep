@@ -73,14 +73,38 @@ public sealed class DesktopHardeningTests
         using var cache = new ProcessIdentityCache(_ => ++opens == 1 ? old : null, () => time);
         Assert.Equal("wardogs", cache.GetName(1));
         Assert.Equal(string.Empty, cache.GetName(2));
-        for (int i = 0; i < 100; i++) { Assert.Equal(string.Empty, cache.GetName(2)); }
+        for (int i = 0; i < 100; i++)
+        {
+            Assert.Equal(string.Empty, cache.GetName(2));
+            Assert.Equal("wardogs", cache.GetName(1));
+        }
         Assert.Equal(2, opens);
-        Assert.Equal(1, old.Disposals);
+        Assert.Equal(0, old.Disposals);
         time = 1000;
         Assert.Equal(string.Empty, cache.GetName(2));
         Assert.Equal(3, opens);
         Assert.Equal(string.Empty, cache.GetName(0));
         Assert.Equal(3, opens);
+    }
+
+    [Fact]
+    public void AlternatingDeniedPidsStayThrottledAndTheFailureCacheIsBounded()
+    {
+        long time = 0;
+        var opened = new List<uint>();
+        using var cache = new ProcessIdentityCache(pid => { opened.Add(pid); return null; }, () => time);
+        for (int round = 0; round < 50; round++)
+        {
+            Assert.Equal(string.Empty, cache.GetName(2));
+            Assert.Equal(string.Empty, cache.GetName(3));
+        }
+        Assert.Equal(new uint[] { 2, 3 }, opened);
+        for (uint pid = 100; pid < 200; pid++) { cache.GetName(pid); }
+        Assert.Equal(102, opened.Count);
+        Assert.Equal(string.Empty, cache.GetName(199));
+        Assert.Equal(102, opened.Count);
+        cache.GetName(2);
+        Assert.Equal(103, opened.Count);
     }
 
     [Fact]
@@ -163,6 +187,27 @@ public sealed class DesktopHardeningTests
         Assert.True(sampler.TryTake(out var clear));
         Assert.Equal(InputAction.Clear, clear.Action);
         Assert.False(sampler.TryTake(out _));
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void HeldAliasAndChordCoalesceIntoOneGestureInEitherOrder(bool origin, bool aliasFirst)
+    {
+        var sampler = Enabled();
+        var alias = origin ? Idle with { Origin = true } : Idle with { Target = true };
+        var chord = Idle with { Middle = true, Control = origin, Shift = !origin };
+        var both = origin ? chord with { Origin = true } : chord with { Target = true };
+        sampler.Sample(aliasFirst ? alias : chord, 1);
+        sampler.Sample(both, 2);
+        Assert.True(sampler.TryTake(out var gesture));
+        Assert.Equal(origin ? InputAction.Origin : InputAction.Target, gesture.Action);
+        Assert.Equal(1, gesture.Timestamp);
+        Assert.False(sampler.TryTake(out _));
+        sampler.Sample(Idle, 3);
+        sampler.Sample(aliasFirst ? chord : alias, 4);
+        Assert.True(sampler.TryTake(out var again));
+        Assert.Equal(4, again.Timestamp);
     }
 
     [Fact]

@@ -129,9 +129,12 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <CheckBox x:Name="DebugModeBox" Grid.Column="0" Content="Save debug captures (50 image/record pairs)"
-                                  Checked="Setting_Changed" Unchecked="Setting_Changed"/>
-                        <Button Grid.Column="1" Content="Open folder" Padding="8,3" FontSize="11" Click="OpenCapturesButton_Click"/>
+                        <CheckBox x:Name="DebugModeBox" Grid.Column="0" Margin="0,0,8,0" VerticalAlignment="Center"
+                                  Checked="Setting_Changed" Unchecked="Setting_Changed">
+                            <TextBlock Text="Save debug captures (50 image/record pairs)" TextWrapping="Wrap"/>
+                        </CheckBox>
+                        <Button Grid.Column="1" Content="Open folder" Padding="8,3" FontSize="11" VerticalAlignment="Center"
+                                Click="OpenCapturesButton_Click"/>
                     </Grid>
 
                     <TextBlock x:Name="SettingsErrorText" Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"

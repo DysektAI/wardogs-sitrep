@@ -3,6 +3,8 @@ namespace Sitrep.Core;
 public readonly record struct CaptureRegion(int X, int Y, int Width, int Height)
 {
     public bool IsEmpty => Width <= 0 || Height <= 0;
+
+    public bool Contains(int x, int y) => !IsEmpty && x >= X && x < X + Width && y >= Y && y < Y + Height;
 }
 
 public static class RoiBuilder
@@ -50,13 +52,13 @@ public static class RoiBuilder
         {
             return new CaptureRegion(0, 0, 0, 0);
         }
-        int size = (int)Math.Round(clientHeight * MapHeightFraction);
+        int size = Math.Min(clientWidth, (int)Math.Round(clientHeight * MapHeightFraction));
         return new CaptureRegion((clientWidth - size) / 2, (clientHeight - size) / 2, size, size);
     }
 
     public static bool IsPointInsideMap(int clientX, int clientY, int clientWidth, int clientHeight)
     {
         var map = GetCenteredMapRegion(clientWidth, clientHeight);
-        return !map.IsEmpty && clientX >= map.X && clientX < map.X + map.Width && clientY >= map.Y && clientY < map.Y + map.Height;
+        return map.Contains(clientX, clientY);
     }
 }

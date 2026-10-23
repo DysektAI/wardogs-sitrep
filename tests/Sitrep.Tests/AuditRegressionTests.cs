@@ -93,6 +93,10 @@ public sealed class AuditRegressionTests
     [InlineData("{\"RoiOffsetX\":-2001}")]
     [InlineData("{\"ForegroundTitleContains\":null}")]
     [InlineData("{\"TessDataDir\":null}")]
+    [InlineData("{\"GameProcessName\":\"\"}")]
+    [InlineData("{\"GameProcessName\":\"   \"}")]
+    [InlineData("{\"OverlayLeft\":10}")]
+    [InlineData("{\"OverlayTop\":10}")]
     public void InvalidConfigIsReportedAndNeverOverwritten(string contents)
     {
         string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
@@ -119,6 +123,29 @@ public sealed class AuditRegressionTests
             config.Save(path);
             Assert.Equal(400, AppConfig.Load(path).RoiWidth);
             Assert.Equal("local fixture", AppConfig.Load(path).ForegroundTitleContains);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData("{\"OverlayLeft\":-1,\"OverlayTop\":-1}", null, null)]
+    [InlineData("{\"ConfigVersion\":1,\"OverlayLeft\":-1,\"OverlayTop\":-1}", null, null)]
+    [InlineData("{\"ConfigVersion\":2,\"OverlayLeft\":-1,\"OverlayTop\":-1}", -1.0, -1.0)]
+    [InlineData("{\"OverlayLeft\":-1,\"OverlayTop\":5}", -1.0, 5.0)]
+    public void LegacyOverlaySentinelMigratesOnlyForPreVersion2Configs(string contents, double? left, double? top)
+    {
+        string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        try
+        {
+            File.WriteAllText(path, contents);
+            var config = AppConfig.Load(path);
+            Assert.Equal(left, config.OverlayLeft);
+            Assert.Equal(top, config.OverlayTop);
+            config.Save(path);
+            var reloaded = AppConfig.Load(path);
+            Assert.Equal(AppConfig.CurrentConfigVersion, reloaded.ConfigVersion);
+            Assert.Equal(left, reloaded.OverlayLeft);
+            Assert.Equal(top, reloaded.OverlayTop);
         }
         finally { File.Delete(path); }
     }

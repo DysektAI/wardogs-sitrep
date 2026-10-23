@@ -51,13 +51,13 @@ Keep model/native binaries out of ordinary generated-source commits. A short, id
 
 Provide one control window (status, hotkey guide, overlay lock, settings) that exits the whole application when closed and disposes its workers/handles, even if the overlay is still open. Minimizing it may hide it only after native `Shell_NotifyIcon` registration succeeds; otherwise retain taskbar access. Re-register after `TaskbarCreated` and reveal a hidden window if recovery fails. No additional UI frameworks. Provide a separate small, non-activating, click-through gameplay overlay that may be temporarily unlocked for repositioning and re-locked in place.
 
-Defaults (revision 3; the earlier F8/F7/F10 scheme is superseded):
+Defaults (revision 3; F10 is removed and F8/F7 remain only as aliases):
 
 | Control | Action |
 |---|---|
 | Ctrl + middle mouse | Capture/re-establish mortar origin |
 | Shift + middle mouse | Capture target |
-| F9 | Clear origin, target, and solution (only while the game or SITREP's control window is in the foreground) |
+| F9 | Clear origin, target, and solution (only while the attached game window — or the attached desktop-test window in test mode — or SITREP's control window is in the foreground) |
 | F8 / F7 | Keyboard aliases for origin / target |
 
 An unmodified middle click is the game's own ping and never triggers SITREP capture. Both triggers use the same capture pipeline; there is no second calculator implementation. Input observation starts enabled, but capture requires a non-SITREP foreground window matching the configured executable substring or optional title fallback, or explicit desktop test mode. Unknown/nonmatching identity blocks capture. When client bounds are known, clicks outside the centered map square reject as `OUTSIDE MAP AREA`; desktop test mode skips this map guard. Unknown bounds do not bypass the capture backend's client/monitor bounds checks. Normal game mouse/keyboard input must not be consumed or synthesized.

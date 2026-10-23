@@ -34,6 +34,8 @@ public partial class MainWindow : Window
     private IntPtr _lastForeground;
     private string _lastForeignProcess = string.Empty;
     private bool _gameRunning;
+    private bool _scanInFlight;
+    private int _scanGeneration;
     private bool _loadingSettings;
 
     public MainWindow(AssistantService service, InputMonitor input, AppConfig config, OverlayWindow overlay, string startupError)
@@ -280,23 +282,52 @@ public partial class MainWindow : Window
     private void ScanForGame()
     {
         if (_closing) { return; }
-        bool running = _service.MatchesGameProcess(Win32.GetProcessName(Win32.GetForegroundWindow()));
-        if (!running && !_config.DesktopTestMode && !string.IsNullOrWhiteSpace(_config.GameProcessName))
+        if (_service.MatchesGameProcess(Win32.GetProcessName(Win32.GetForegroundWindow())))
         {
-            // Status-only enumeration at 2 s, never on the input sampling thread. Dispose even exited processes.
-            foreach (var process in System.Diagnostics.Process.GetProcesses())
+            SetGameRunning(true);
+            return;
+        }
+        if (_config.DesktopTestMode || string.IsNullOrWhiteSpace(_config.GameProcessName))
+        {
+            SetGameRunning(false);
+            return;
+        }
+        if (_scanInFlight) { return; }
+        // Status-only enumeration off the dispatcher; names are matched back on the UI thread against current settings.
+        _scanInFlight = true;
+        int generation = _scanGeneration;
+        Task.Run(ListProcessNames).ContinueWith(scan => Dispatcher.BeginInvoke(() =>
+        {
+            _scanInFlight = false;
+            if (scan.IsFaulted)
             {
-                using (process)
+                System.Diagnostics.Trace.TraceError("Process scan failed: {0}", scan.Exception);
+                return;
+            }
+            if (_closing || generation != _scanGeneration || _config.DesktopTestMode) { return; }
+            SetGameRunning(scan.Result.Any(_service.MatchesGameProcess));
+        }), TaskScheduler.Default);
+    }
+
+    private static List<string> ListProcessNames()
+    {
+        var names = new List<string>();
+        foreach (var process in System.Diagnostics.Process.GetProcesses())
+        {
+            using (process)
+            {
+                try { names.Add(process.ProcessName); }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
                 {
-                    if (running) { continue; }
-                    try { running = _service.MatchesGameProcess(process.ProcessName); }
-                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-                    {
-                        // A process may exit or deny metadata access during enumeration.
-                    }
+                    // A process may exit or deny metadata access during enumeration.
                 }
             }
         }
+        return names;
+    }
+
+    private void SetGameRunning(bool running)
+    {
         if (running != _gameRunning)
         {
             _gameRunning = running;
@@ -308,13 +339,18 @@ public partial class MainWindow : Window
     {
         if (_closing || !_input.IsCurrent(gesture)) { return; }
         ObserveForeground();
+        long control = new WindowInteropHelper(this).Handle.ToInt64();
         // Never retarget a sampled F9 to a later foreground, nor authorize an owned overlay as the control window.
-        // Focus resets still discard queued clears; recheck the epoch after foreground observation as well.
-        if (!ClearInputPolicy.IsAllowed(gesture, _input.IsCurrent(gesture), Win32.GetForegroundWindow().ToInt64(),
-            _foreground.AttachedWindow, _foreground.IsForeground, new WindowInteropHelper(this).Handle.ToInt64())) { return; }
-        _service.State.Clear();
-        _service.DiscardPending();
-        Refresh();
+        // The policy check and the clear commit atomically with the gesture epoch, so a focus reset cannot interleave.
+        bool cleared = _input.TryCommitCurrent(gesture, () =>
+        {
+            if (!ClearInputPolicy.IsAllowed(gesture, true, Win32.GetForegroundWindow().ToInt64(),
+                _foreground.AttachedWindow, _foreground.IsForeground, control)) { return false; }
+            _service.State.Clear();
+            _service.DiscardPending();
+            return true;
+        });
+        if (cleared) { Refresh(); }
     }
 
     // ---- overlay ------------------------------------------------------------------------------------
@@ -392,6 +428,14 @@ public partial class MainWindow : Window
             return;
         }
         string process = GameProcessBox.Text.Trim();
+        if (process.Length == 0)
+        {
+            ShowSettingsError("A game process name is required; keeping the previous value.");
+            _loadingSettings = true;
+            GameProcessBox.Text = _config.GameProcessName;
+            _loadingSettings = false;
+            process = _config.GameProcessName;
+        }
         bool testMode = DesktopTestBox.IsChecked == true;
         bool onTop = AlwaysOnTopBox.IsChecked == true;
         bool debug = DebugModeBox.IsChecked == true;
@@ -401,27 +445,32 @@ public partial class MainWindow : Window
             return;
         }
 
-        _config.GameProcessName = process;
-        _config.DesktopTestMode = testMode;
-        _config.AlwaysOnTop = onTop;
-        _config.DebugMode = debug;
+        var previous = (_config.GameProcessName, _config.DesktopTestMode, _config.AlwaysOnTop, _config.DebugMode);
+        (_config.GameProcessName, _config.DesktopTestMode, _config.AlwaysOnTop, _config.DebugMode) = (process, testMode, onTop, debug);
+        if (!PersistConfig())
+        {
+            // An unsaved change never takes effect; the controls show the settings still in force.
+            (_config.GameProcessName, _config.DesktopTestMode, _config.AlwaysOnTop, _config.DebugMode) = previous;
+            LoadSettings();
+            return;
+        }
         Topmost = onTop;
         GameProcessBox.IsEnabled = !testMode;
 
         if (targetingChanged)
         {
             // A different game identity invalidates the attached window and any confirmed origin.
+            _scanGeneration++;
             _service.DiscardPending();
             _foreground.Reset();
             _input.ResetEdges();
             ObserveForeground();
             ScanForGame();
         }
-        PersistConfig();
         Refresh();
     }
 
-    private void PersistConfig()
+    private bool PersistConfig()
     {
         try
         {
@@ -430,10 +479,12 @@ public partial class MainWindow : Window
             SavedText.Visibility = Visibility.Visible;
             _savedFlash.Stop();
             _savedFlash.Start();
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             ShowSettingsError($"Could not save {AppConfig.ConfigPath}: {ex.Message}");
+            return false;
         }
     }
 
@@ -467,7 +518,7 @@ public partial class MainWindow : Window
     {
         if (_closing) { return; }
         var s = _service.State;
-        StatusLevel level = StatusLevelMapper.ForStatus(s.Status);
+        StatusLevel level = StatusLevels.ForStatus(s.Status);
         bool inGame = _foreground.IsForeground;
 
         // Header pill: where the game is relative to us.

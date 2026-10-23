@@ -53,6 +53,12 @@ public sealed class InputMonitor : IDisposable
         lock (_gate) { return !_disposed && _enabled && gesture.Epoch == _sampling.Epoch; }
     }
 
+    // Runs the commit while the gesture is still current, so no focus reset can interleave with it.
+    public bool TryCommitCurrent(InputGesture gesture, Func<bool> commit)
+    {
+        lock (_gate) { return !_disposed && _enabled && gesture.Epoch == _sampling.Epoch && commit(); }
+    }
+
     private static bool IsDown(int vk) => (Win32.GetAsyncKeyState(vk) & 0x8000) != 0;
 
     private static InputSample ReadSample()

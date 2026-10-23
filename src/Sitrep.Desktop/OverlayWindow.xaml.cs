@@ -12,27 +12,42 @@ namespace Sitrep.Desktop;
 public partial class OverlayWindow : Window
 {
     private readonly AppConfig _config;
+    private readonly Rect? _virtualScreen;
 
     public bool IsInteractive { get; private set; }
 
     /// <summary>Raised after a lock or unlock, including the double-click lock from the overlay itself.</summary>
     public event Action? InteractiveChanged;
 
-    public OverlayWindow(AppConfig config)
+    public OverlayWindow(AppConfig config, Rect? virtualScreen = null)
     {
         _config = config;
+        _virtualScreen = virtualScreen;
         InitializeComponent();
         ApplyPosition(config);
+        // SizeToContent="Height" only knows the real height after layout; re-clamp whenever it changes.
+        SizeChanged += (_, e) =>
+        {
+            if (e.HeightChanged)
+            {
+                var screen = VirtualScreen;
+                Top = OverlayPlacement.Clamp(Top, screen.Top, screen.Height, ActualHeight);
+            }
+        };
     }
+
+    private Rect VirtualScreen => _virtualScreen ?? new Rect(SystemParameters.VirtualScreenLeft,
+        SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
 
     public void ApplyPosition(AppConfig config)
     {
-        // Null means "never positioned". Any finite value is honoured, including negative coordinates
-        // from monitors left of / above the primary.
+        // Null means "never positioned". Saved positions may be on monitors left of / above the primary, but are
+        // clamped to the current virtual screen so a resized overlay or a removed monitor cannot hide the readout.
         if (config.OverlayLeft.HasValue && config.OverlayTop.HasValue)
         {
-            Left = config.OverlayLeft.Value;
-            Top = config.OverlayTop.Value;
+            var screen = VirtualScreen;
+            Left = OverlayPlacement.Clamp(config.OverlayLeft.Value, screen.Left, screen.Width, Width);
+            Top = OverlayPlacement.Clamp(config.OverlayTop.Value, screen.Top, screen.Height, Math.Max(MinHeight, ActualHeight));
         }
         else
         {

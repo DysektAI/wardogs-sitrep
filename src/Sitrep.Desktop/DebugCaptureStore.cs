@@ -2,21 +2,30 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Sitrep.Core;
 
 namespace Sitrep.Desktop;
 
-internal static class DebugCaptureStore
+internal static partial class DebugCaptureStore
 {
     internal static string DefaultDirectory => Path.Combine(AppConfig.ConfigDir, "captures");
 
-    internal static void Save(CaptureRequest request, Bitmap image, RecognitionResult result, string? directory = null)
+    // Only records this store named are pruned; anything else a user drops into the folder is left alone.
+    [GeneratedRegex(@"^\d{8}-\d{6}-\d{7}_(Origin|Target)_-?\d+_[0-9a-f]{32}\.(png|json)(\.tmp)?$", RegexOptions.CultureInvariant)]
+    private static partial Regex OwnedName();
+
+    internal static bool IsOwnedName(string fileName) => OwnedName().IsMatch(fileName);
+
+    internal static void Save(CaptureRequest request, int snapshot, Bitmap image, RecognitionResult snapshotResult,
+        RecognitionResult result, string? directory = null)
     {
-        SaveRecord(request, stream => image.Save(stream, ImageFormat.Png), result, directory ?? DefaultDirectory);
+        SaveRecord(request, snapshot, stream => image.Save(stream, ImageFormat.Png), snapshotResult, result, directory ?? DefaultDirectory);
     }
 
     // Stream boundary also lets packaged tests simulate a partially failed encoder without corrupting a bitmap.
-    internal static void SaveRecord(CaptureRequest request, Action<Stream> writeImage, RecognitionResult result, string directory)
+    internal static void SaveRecord(CaptureRequest request, int snapshot, Action<Stream> writeImage,
+        RecognitionResult snapshotResult, RecognitionResult result, string directory)
     {
         try
         {
@@ -28,8 +37,13 @@ internal static class DebugCaptureStore
             bool acquired;
             try { acquired = mutex.WaitOne(TimeSpan.FromSeconds(2)); }
             catch (AbandonedMutexException) { acquired = true; }
-            if (!acquired) { return; } // Diagnostics must not indefinitely block OCR/shutdown.
-            try { WritePair(dir, request, writeImage, result); }
+            if (!acquired)
+            {
+                // Diagnostics must not indefinitely block OCR/shutdown, but a dropped record stays observable.
+                System.Diagnostics.Trace.WriteLine("Debug capture not saved: capture directory lock timed out.");
+                return;
+            }
+            try { WritePair(dir, request, snapshot, writeImage, snapshotResult, result); }
             finally { mutex.ReleaseMutex(); }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
@@ -40,7 +54,8 @@ internal static class DebugCaptureStore
         }
     }
 
-    private static void WritePair(string dir, CaptureRequest request, Action<Stream> writeImage, RecognitionResult result)
+    private static void WritePair(string dir, CaptureRequest request, int snapshot, Action<Stream> writeImage,
+        RecognitionResult snapshotResult, RecognitionResult result)
     {
         Directory.CreateDirectory(dir);
         File.Delete(Path.Combine(dir, "records.log"));
@@ -54,6 +69,8 @@ internal static class DebugCaptureStore
             string json = JsonSerializer.Serialize(new
             {
                 request,
+                snapshot,
+                snapshotResult,
                 result,
                 profile = "L81 Apollyon, uncorrected table",
                 completedAt = DateTimeOffset.UtcNow,
@@ -91,10 +108,9 @@ internal static class DebugCaptureStore
 
     private static void Prune(string dir, int keep)
     {
-        foreach (string temp in Directory.EnumerateFiles(dir, "*.tmp")) { File.Delete(temp); }
-        var records = new DirectoryInfo(dir).GetFiles()
-            .Where(f => f.Extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
-                || f.Extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
+        var owned = new DirectoryInfo(dir).GetFiles().Where(f => IsOwnedName(f.Name)).ToList();
+        foreach (var temp in owned.Where(f => f.Extension == ".tmp")) { temp.Delete(); }
+        var records = owned.Where(f => f.Extension != ".tmp")
             .GroupBy(f => Path.GetFileNameWithoutExtension(f.Name), StringComparer.OrdinalIgnoreCase)
             .OrderBy(g => g.Min(f => f.CreationTimeUtc)).ThenBy(g => g.Key, StringComparer.Ordinal).ToList();
         var pairs = new List<FileInfo[]>();

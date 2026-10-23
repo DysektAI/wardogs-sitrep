@@ -1,6 +1,6 @@
 # AGENT PROMPT: SITREP Post-MVP Engineering Directive
 
-You are working on the WARDOGS Mortar Assistant (`SITREP`). The foundational trial MVP (130+ unit/integration tests, offline coordinate math, native Tesseract OCR packaging, custom branding, and packaged self-test) is complete and verified.
+You are working on the WARDOGS Mortar Assistant (`SITREP`). The foundational trial is implemented and its offline trial gates passed (see `docs/VALIDATION.md` for current test counts); Gate E and in-game use are not validated.
 
 Your mandate is post-MVP excellence: production hardening, UI/UX refinement, performance optimization, and Gate E real-game readiness.
 
@@ -14,7 +14,7 @@ Your mandate is post-MVP excellence: production hardening, UI/UX refinement, per
 2. **Relentless Closed-Loop Verification:**
    - Always verify changes end-to-end. Run the test suite (`dotnet test tests/Sitrep.Tests -c Release`) and canonical verification (`pwsh -ExecutionPolicy Bypass -File scripts/verify.ps1`).
    - Fix all compiler warnings and analyzer diagnostics immediately (`EnforceCodeStyleInBuild` is active).
-   - If a test, diagnostic probe, or build fails, formulate precise hypotheses, inspect diagnostic outputs, and autonomously iterate until all checks pass cleanly.
+   - If a test, diagnostic probe, or build fails, formulate precise hypotheses and inspect diagnostic outputs. After two distinct unsuccessful fixes for the same blocker, record the exact missing input or failing observation in `docs/VALIDATION.md` and continue only independent useful work.
 
 3. **Proactive Edge-Case Sweeping:**
    - Actively audit and safeguard against real-world friction points:
@@ -26,6 +26,7 @@ Your mandate is post-MVP excellence: production hardening, UI/UX refinement, per
 4. **Non-Negotiable Safety & Architectural Invariants:**
    - **Zero Anti-Cheat Surface:** Never read/write game process memory, never inject DLLs, never use global low-level hooks, never synthesize input, and never attempt anti-cheat evasion. SITREP is an external, screen-reading assistant only.
    - **Fail-Closed Guarantee:** Any unverified firing table or rejected OCR reading must immediately invalidate solutions and fail closed (`OUT OF RANGE`, `TABLE UNVERIFIED`, `TARGET OCR FAILED`). Never guess or emit a plausible unverified MIL setting.
+   - **Explicit Approval Gate:** Publisher/developer permission is unresolved. Never run SITREP against the live game, or claim Gate E, without explicit approval; offline fixtures and desktop test mode are the only validation targets until then.
    - **Local-Only Privacy:** No telemetry, no network calls, no cloud dependencies. Keep user screenshots and private test fixtures local (`captures/`, `fixtures-local/` remain gitignored).
 
 5. **Progress & Validation Record:**
