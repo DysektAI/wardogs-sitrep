@@ -43,10 +43,7 @@ public sealed class InputSampling
             Reset(_enabled, sample);
             return;
         }
-        bool middle = sample.Middle && !_previous.Middle;
-        bool origin = (sample.Origin && !_previous.Origin) || (middle && sample.Control && !sample.Shift);
-        bool target = (sample.Target && !_previous.Target) || (middle && sample.Shift && !sample.Control);
-        bool clear = sample.Clear && !_previous.Clear;
+        var (origin, target, clear) = Edges(_previous, sample);
         _previous = sample; // Freeze all edges/modifiers before any consumer can run synchronous work.
         if (!_enabled) { return; }
         if (clear)
@@ -65,6 +62,19 @@ public sealed class InputSampling
         }
         // Origin wins simultaneous origin/target aliases; one gesture per sample.
         _pending.Enqueue(new(origin ? InputAction.Origin : InputAction.Target, sample, timestamp, Epoch));
+    }
+
+    // An alias and its chord are one intent: neither fires while the other is still held from a previous sample.
+    private static (bool Origin, bool Target, bool Clear) Edges(InputSample previous, InputSample sample)
+    {
+        bool middle = sample.Middle && !previous.Middle;
+        bool originChordHeld = previous.Middle && previous.Control && !previous.Shift;
+        bool targetChordHeld = previous.Middle && previous.Shift && !previous.Control;
+        bool origin = (sample.Origin && !previous.Origin && !originChordHeld)
+            || (middle && sample.Control && !sample.Shift && !previous.Origin);
+        bool target = (sample.Target && !previous.Target && !targetChordHeld)
+            || (middle && sample.Shift && !sample.Control && !previous.Target);
+        return (origin, target, sample.Clear && !previous.Clear);
     }
 
     public bool TakeInvalidation()

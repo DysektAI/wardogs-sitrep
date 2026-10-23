@@ -4,6 +4,19 @@ namespace Sitrep.Tests;
 
 public sealed class RoiTests
 {
+    [Theory]
+    [InlineData(100, 50, true)]
+    [InlineData(899, 649, true)]
+    [InlineData(99, 50, false)]
+    [InlineData(100, 49, false)]
+    [InlineData(900, 300, false)]
+    [InlineData(300, 650, false)]
+    public void ClientContainsOnlyCursorPointsInsideItsArea(int x, int y, bool expected)
+    {
+        Assert.Equal(expected, new CaptureRegion(100, 50, 800, 600).Contains(x, y));
+        Assert.False(new CaptureRegion(100, 50, 0, 600).Contains(100, 50));
+    }
+
     [Fact]
     public void BuildsCursorRelativeDefaultSize()
     {
@@ -51,6 +64,8 @@ public sealed class RoiTests
     [Theory]
     [InlineData(1920, 1080, 660, 630, 210)]
     [InlineData(3440, 1440, 880, 1280, 280)]
+    [InlineData(800, 1440, 800, 0, 320)]
+    [InlineData(500, 2000, 500, 0, 750)]
     public void MapRegionScalesWithClientHeightAndStaysCentered(int w, int h, int size, int x, int y)
     {
         Assert.Equal(new CaptureRegion(x, y, size, size), RoiBuilder.GetCenteredMapRegion(w, h));

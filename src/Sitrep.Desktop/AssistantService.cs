@@ -247,11 +247,13 @@ public sealed class AssistantService : IDisposable
 
     private void Process(Work work)
     {
-        var result = RecognitionResult.Reconcile(_recognize(work.Image), _recognize(work.RetryImage));
+        var first = _recognize(work.Image);
+        var retry = _recognize(work.RetryImage);
+        var result = RecognitionResult.Reconcile(first, retry);
         if (work.Debug)
         {
-            DebugCaptureStore.Save(work.Request, work.Image, result);
-            DebugCaptureStore.Save(work.Request, work.RetryImage, result);
+            DebugCaptureStore.Save(work.Request, 1, work.Image, first, result);
+            DebugCaptureStore.Save(work.Request, 2, work.RetryImage, retry, result);
         }
         Publish(work.Request, result);
     }

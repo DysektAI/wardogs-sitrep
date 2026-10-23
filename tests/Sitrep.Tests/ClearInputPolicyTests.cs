@@ -48,17 +48,20 @@ public sealed class ClearInputPolicyTests
         Assert.Equal(new MapCoordinate(100, 100), state.ConfirmedOrigin);
     }
 
-    [Fact]
-    public void AuthorizedClearDiscardsPendingCompletion()
+    [Theory]
+    [InlineData(1L, true)]
+    [InlineData(3L, false)]
+    public void ClearDiscardsPendingCompletionOnlyWhenAuthorized(long current, bool authorized)
     {
         var state = new AssistantState(null);
         var pending = state.BeginOrigin(1, 0, 0, 0, 0, 40, 40);
         var sample = new InputSample(1, 0, 0, true, false, false, true, false, false, false);
-        Assert.True(ClearInputPolicy.IsAllowed(new InputGesture(InputAction.Clear, sample, 1, 1), true, 1, 1, true, 2));
-        state.Clear();
-        Assert.False(state.Complete(new OcrCompletion(pending.Sequence, pending.Generation, pending.Role,
+        bool allowed = ClearInputPolicy.IsAllowed(new InputGesture(InputAction.Clear, sample, 1, 1), true, current, 1, true, 2);
+        Assert.Equal(authorized, allowed);
+        if (allowed) { state.Clear(); }
+        Assert.Equal(!authorized, state.Complete(new OcrCompletion(pending.Sequence, pending.Generation, pending.Role,
             pending.OriginRevision, true, new MapCoordinate(100, 100), "", "")));
-        Assert.Null(state.ConfirmedOrigin);
+        Assert.Equal(authorized, state.ConfirmedOrigin is null);
         Assert.Null(state.Pending);
     }
 }

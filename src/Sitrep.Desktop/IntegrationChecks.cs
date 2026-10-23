@@ -217,8 +217,10 @@ internal static class IntegrationChecks
     private static void CheckNegativeOverlayPositionRoundTrip()
     {
         const double left = -1920, top = -50;
+        // A synthetic monitor layout keeps this check independent of the host's real monitors.
+        var screen = new System.Windows.Rect(-3840, -1080, 7680, 2160);
         var config = new AppConfig { OverlayLeft = left, OverlayTop = top };
-        var overlay = new OverlayWindow(config);
+        var overlay = new OverlayWindow(config, screen);
         OverlayWindow? restored = null;
         try
         {
@@ -256,9 +258,17 @@ internal static class IntegrationChecks
                     "Non-sentinel negative position must not be migrated.");
             }
             finally { File.Delete(path); }
-            restored = new OverlayWindow(reloaded);
+            restored = new OverlayWindow(reloaded, screen);
             Require(restored.Left == overlay.Left && restored.Top == overlay.Top,
                 $"Restored overlay position {restored.Left},{restored.Top} differs from saved {overlay.Left},{overlay.Top}.");
+
+            var offscreen = new OverlayWindow(new AppConfig { OverlayLeft = 1e6, OverlayTop = -1e6 }, screen);
+            try
+            {
+                Require(offscreen.Left == screen.Right - offscreen.Width && offscreen.Top == screen.Top,
+                    $"Off-screen saved position was not clamped to the virtual screen ({offscreen.Left},{offscreen.Top}).");
+            }
+            finally { offscreen.Close(); }
 
             // Reset must return to "unset" (null), not to a sentinel, and the default position must be used.
             restored.ResetPosition();
@@ -285,39 +295,50 @@ internal static class IntegrationChecks
             for (int i = 0; i < 60; i++)
             {
                 var request = new CaptureRequest(i, 0, CaptureRole.Target, 0, 1, DateTimeOffset.UtcNow, 10, 20, 30, 40, 40, 40);
-                DebugCaptureStore.Save(request, frame, new RecognitionResult(false, default, "noise", 0, "NO_COORDINATES"), dir);
+                var noise = new RecognitionResult(false, default, "noise", 0, "NO_COORDINATES");
+                DebugCaptureStore.Save(request, 1, frame, noise, noise, dir);
             }
             Require(Directory.GetFiles(dir).Length == 100, "Debug retention must keep 50 complete PNG/JSON pairs.");
             Require(!File.Exists(Path.Combine(dir, "records.log")), "Legacy unbounded log survived.");
-            File.WriteAllText(Path.Combine(dir, "orphan.png"), "interrupted image");
-            File.WriteAllText(Path.Combine(dir, "orphan-record.json"), "interrupted metadata");
-            File.WriteAllText(Path.Combine(dir, "interrupted.png.tmp"), "partial image");
+            string stale = "20000101-000000-0000000_Target_1_" + new string('0', 32);
+            File.WriteAllText(Path.Combine(dir, stale + ".png"), "interrupted image");
+            File.WriteAllText(Path.Combine(dir, stale.Replace("Target_1", "Origin_2") + ".json"), "interrupted metadata");
+            File.WriteAllText(Path.Combine(dir, stale.Replace("Target_1", "Target_3") + ".png.tmp"), "partial image");
+            string userFile = Path.Combine(dir, "my-screenshot.png");
+            File.WriteAllText(userFile, "user file");
             Parallel.For(0, 80, i =>
             {
                 using var concurrentFrame = Frame((byte)i);
                 var request = new CaptureRequest(7, 0, CaptureRole.Target, 0, 1, DateTimeOffset.UtcNow, 10, 20, 30, 40, 40, 40);
-                DebugCaptureStore.Save(request, concurrentFrame, new RecognitionResult(false, default, i.ToString(System.Globalization.CultureInfo.InvariantCulture), 0, "NO_COORDINATES"), dir);
+                var marked = new RecognitionResult(false, default, i.ToString(System.Globalization.CultureInfo.InvariantCulture), 0, "NO_COORDINATES");
+                DebugCaptureStore.Save(request, 2, concurrentFrame, marked, new RecognitionResult(false, default, "reconciled", 0, "NO_COORDINATES"), dir);
             });
+            Require(File.Exists(userFile), "Debug retention deleted a file it did not create.");
+            File.Delete(userFile);
             var images = Directory.GetFiles(dir, "*.png");
             Require(images.Length == 50 && Directory.GetFiles(dir).Length == 100, "Concurrent retention left missing pairs, temps or orphans.");
             foreach (string image in images)
             {
                 using var metadata = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.ChangeExtension(image, ".json")));
                 int sequence = metadata.RootElement.GetProperty("request").GetProperty("Sequence").GetInt32();
+                Require(metadata.RootElement.GetProperty("snapshot").GetInt32() == 2
+                    && metadata.RootElement.GetProperty("result").GetProperty("RawText").GetString() == "reconciled",
+                    "Debug metadata lost the snapshot index or the reconciled result.");
                 using var bitmap = new Bitmap(image);
-                int marker = int.Parse(metadata.RootElement.GetProperty("result").GetProperty("RawText").GetString()!,
+                int marker = int.Parse(metadata.RootElement.GetProperty("snapshotResult").GetProperty("RawText").GetString()!,
                     System.Globalization.CultureInfo.InvariantCulture);
                 Require(sequence == 7 && bitmap.GetPixel(0, 0).R == marker, "Concurrent same-request save collided or mismatched image and metadata.");
             }
             var failed = new CaptureRequest(999, 0, CaptureRole.Origin, 0, 1, DateTimeOffset.UtcNow, 0, 0, 0, 0, 40, 40);
-            DebugCaptureStore.SaveRecord(failed, stream =>
+            var empty = new RecognitionResult(false, default, "", 0, "NO_COORDINATES");
+            DebugCaptureStore.SaveRecord(failed, 1, stream =>
             {
                 stream.WriteByte(1);
                 throw new IOException("Injected partial encoder failure");
-            }, new RecognitionResult(false, default, "", 0, "NO_COORDINATES"), dir);
+            }, empty, empty, dir);
             Require(Directory.GetFiles(dir).Length == 98 && !Directory.GetFiles(dir).Any(p => p.Contains("_999_", StringComparison.Ordinal)),
                 "Failed write left a partial image, metadata, or temporary file.");
-            DebugCaptureStore.Save(failed, frame, new RecognitionResult(false, default, "", 0, "NO_COORDINATES"), dir);
+            DebugCaptureStore.Save(failed, 1, frame, empty, empty, dir);
             Require(Directory.GetFiles(dir).Length == 100, "Store did not recover after failed write.");
         }
         finally { if (Directory.Exists(dir)) { Directory.Delete(dir, recursive: true); } }

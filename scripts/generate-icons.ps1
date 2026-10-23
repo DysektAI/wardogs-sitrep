@@ -18,81 +18,100 @@ if (-not (Test-Path -LiteralPath $DestDir)) {
   New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
 }
 
-$srcImage = [System.Drawing.Bitmap]::FromFile((Resolve-Path $Source).Path)
-try {
-  function Resize-Bmp([System.Drawing.Bitmap]$orig, [int]$w, [int]$h) {
-    $dest = New-Object System.Drawing.Bitmap($w, $h, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$logoPath = Join-Path $DestDir "logo-64.png"
+$icoPath = Join-Path $DestDir "app.ico"
+# Both assets are written and verified as temporaries first, so a failure never leaves a mixed or truncated pair.
+$logoTemp = "$logoPath.tmp"
+$icoTemp = "$icoPath.tmp"
+$icoSizes = @(16, 24, 32, 48, 64, 128, 256)
+
+function Resize-Bmp([System.Drawing.Bitmap]$orig, [int]$w, [int]$h) {
+  $dest = New-Object System.Drawing.Bitmap($w, $h, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+  try {
     $g = [System.Drawing.Graphics]::FromImage($dest)
-    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-    $g.Clear([System.Drawing.Color]::Transparent)
-    $g.DrawImage($orig, 0, 0, $w, $h)
-    $g.Dispose()
+    try {
+      $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+      $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+      $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+      $g.Clear([System.Drawing.Color]::Transparent)
+      $g.DrawImage($orig, 0, 0, $w, $h)
+    } finally {
+      $g.Dispose()
+    }
     return $dest
+  } catch {
+    $dest.Dispose()
+    throw
   }
+}
 
-  function Save-Png([System.Drawing.Bitmap]$bmp, [string]$outPath) {
-    $bmp.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
-  }
-
-  # Header logo badge (MainWindow.xaml). Only assets referenced by the app are generated and embedded.
-  $logo64 = Resize-Bmp $srcImage 64 64
-  Save-Png $logo64 (Join-Path $DestDir "logo-64.png")
-  $logo64.Dispose()
-
-  # Build multi-resolution .ico (16, 24, 32, 48, 64, 128, 256)
-  $icoSizes = @(16, 24, 32, 48, 64, 128, 256)
-  $pngDataList = @()
-  foreach ($s in $icoSizes) {
-    $bmp = Resize-Bmp $srcImage $s $s
+function Get-PngBytes([System.Drawing.Bitmap]$orig, [int]$size) {
+  $bmp = Resize-Bmp $orig $size $size
+  try {
     $ms = New-Object System.IO.MemoryStream
-    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-    $pngDataList += ,( $ms.ToArray() )
-    $ms.Dispose()
+    try {
+      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      return ,($ms.ToArray())
+    } finally {
+      $ms.Dispose()
+    }
+  } finally {
     $bmp.Dispose()
   }
+}
 
-  $icoPath = Join-Path $DestDir "app.ico"
+$srcImage = [System.Drawing.Bitmap]::FromFile((Resolve-Path $Source).Path)
+try {
+  # Header logo badge (MainWindow.xaml). Only assets referenced by the app are generated and embedded.
+  [System.IO.File]::WriteAllBytes($logoTemp, (Get-PngBytes $srcImage 64))
+
+  # Build multi-resolution .ico (16, 24, 32, 48, 64, 128, 256)
+  $pngDataList = @()
+  foreach ($s in $icoSizes) {
+    $pngDataList += ,(Get-PngBytes $srcImage $s)
+  }
+
   $icoStream = New-Object System.IO.MemoryStream
   $bw = New-Object System.IO.BinaryWriter($icoStream)
+  try {
+    # Header: reserved (0), type (1 = icon), count
+    $bw.Write([UInt16]0)
+    $bw.Write([UInt16]1)
+    $bw.Write([UInt16]$icoSizes.Count)
 
-  # Header: reserved (0), type (1 = icon), count
-  $bw.Write([UInt16]0)
-  $bw.Write([UInt16]1)
-  $bw.Write([UInt16]$icoSizes.Count)
+    # Directory entries (16 bytes each)
+    $dataOffset = 6 + ($icoSizes.Count * 16)
+    for ($i = 0; $i -lt $icoSizes.Count; $i++) {
+      $size = $icoSizes[$i]
+      $data = $pngDataList[$i]
+      $dimByte = if ($size -ge 256) { [byte]0 } else { [byte]$size }
 
-  # Directory entries (16 bytes each)
-  $dataOffset = 6 + ($icoSizes.Count * 16)
-  for ($i = 0; $i -lt $icoSizes.Count; $i++) {
-    $size = $icoSizes[$i]
-    $data = $pngDataList[$i]
-    $dimByte = if ($size -ge 256) { [byte]0 } else { [byte]$size }
+      $bw.Write($dimByte)              # bWidth
+      $bw.Write($dimByte)              # bHeight
+      $bw.Write([byte]0)               # bColorCount
+      $bw.Write([byte]0)               # bReserved
+      $bw.Write([UInt16]1)             # wPlanes
+      $bw.Write([UInt16]32)            # wBitCount
+      $bw.Write([UInt32]$data.Length)  # dwBytesInRes
+      $bw.Write([UInt32]$dataOffset)   # dwImageOffset
 
-    $bw.Write($dimByte)              # bWidth
-    $bw.Write($dimByte)              # bHeight
-    $bw.Write([byte]0)               # bColorCount
-    $bw.Write([byte]0)               # bReserved
-    $bw.Write([UInt16]1)             # wPlanes
-    $bw.Write([UInt16]32)            # wBitCount
-    $bw.Write([UInt32]$data.Length)  # dwBytesInRes
-    $bw.Write([UInt32]$dataOffset)   # dwImageOffset
+      $dataOffset += $data.Length
+    }
 
-    $dataOffset += $data.Length
+    # Image data chunks
+    for ($i = 0; $i -lt $icoSizes.Count; $i++) {
+      $bw.Write($pngDataList[$i])
+    }
+    $bw.Flush()
+    [System.IO.File]::WriteAllBytes($icoTemp, $icoStream.ToArray())
+  } finally {
+    $bw.Dispose()
+    $icoStream.Dispose()
   }
 
-  # Image data chunks
-  for ($i = 0; $i -lt $icoSizes.Count; $i++) {
-    $bw.Write($pngDataList[$i])
-  }
-
-  [System.IO.File]::WriteAllBytes($icoPath, $icoStream.ToArray())
-  $bw.Dispose()
-  $icoStream.Dispose()
-
-  # Verify created icon
-  $verifyStream = [System.IO.File]::OpenRead($icoPath)
+  # Verify the temporary icon before replacing anything.
+  $verifyStream = [System.IO.File]::OpenRead($icoTemp)
   try {
     $decoder = New-Object System.Windows.Media.Imaging.IconBitmapDecoder(
       $verifyStream,
@@ -106,7 +125,10 @@ try {
     $verifyStream.Dispose()
   }
 
+  Move-Item -LiteralPath $icoTemp -Destination $icoPath -Force
+  Move-Item -LiteralPath $logoTemp -Destination $logoPath -Force
   Write-Host "Successfully generated icon and logo assets in $DestDir"
 } finally {
   $srcImage.Dispose()
+  Remove-Item -LiteralPath $logoTemp, $icoTemp -Force -ErrorAction SilentlyContinue
 }

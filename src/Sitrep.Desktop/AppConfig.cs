@@ -5,6 +5,10 @@ namespace Sitrep.Desktop;
 
 public sealed class AppConfig
 {
+    /// <summary>Version 2 stores -1/-1 as a real overlay position; older files used it as "no saved position".</summary>
+    public const int CurrentConfigVersion = 2;
+
+    public int ConfigVersion { get; set; }
     public string GameProcessName { get; set; } = "wardogs";
     public string ForegroundTitleContains { get; set; } = string.Empty;
     public bool DesktopTestMode { get; set; }
@@ -37,11 +41,13 @@ public sealed class AppConfig
                 ?? throw new InvalidDataException("Configuration must be a JSON object.");
             // Earlier builds persisted -1/-1 as "no saved overlay position"; keep those installs on the default placement.
             // Compare bit patterns so only the literal -1 sentinel migrates, not values that merely compare equal to it.
-            if (Exactly(cfg.OverlayLeft.GetValueOrDefault(), -1) && Exactly(cfg.OverlayTop.GetValueOrDefault(), -1))
+            if (cfg.ConfigVersion < CurrentConfigVersion
+                && Exactly(cfg.OverlayLeft.GetValueOrDefault(), -1) && Exactly(cfg.OverlayTop.GetValueOrDefault(), -1))
             {
                 cfg.OverlayLeft = null;
                 cfg.OverlayTop = null;
             }
+            cfg.ConfigVersion = CurrentConfigVersion;
             cfg.Validate();
             return cfg;
         }
@@ -66,17 +72,19 @@ public sealed class AppConfig
         {
             throw new InvalidDataException("ROI width/height must be 40–2000 px and offsets -2000–2000 px.");
         }
-        if (GameProcessName is null || ForegroundTitleContains is null || string.IsNullOrWhiteSpace(TessDataDir)
+        if (string.IsNullOrWhiteSpace(GameProcessName) || ForegroundTitleContains is null || string.IsNullOrWhiteSpace(TessDataDir)
+            || OverlayLeft.HasValue != OverlayTop.HasValue
             || (OverlayLeft.HasValue && !double.IsFinite(OverlayLeft.Value))
             || (OverlayTop.HasValue && !double.IsFinite(OverlayTop.Value)))
         {
-            throw new InvalidDataException("Game process name, title match, tessdata path, and finite overlay positions are required.");
+            throw new InvalidDataException("Game process name, title match, tessdata path, and a finite overlay position pair are required.");
         }
     }
 
     public void Save(string? path = null)
     {
         Validate();
+        ConfigVersion = CurrentConfigVersion;
         path = Path.GetFullPath(path ?? ConfigPath);
         string directory = Path.GetDirectoryName(path)
             ?? throw new ArgumentException("Configuration path must name a file, not a filesystem root.", nameof(path));

@@ -340,7 +340,7 @@
       120
     ]
   ],
-  "source": "https://raw.githubusercontent.com/apollyon-sys/wardogs-calculator/main/data/weapons.json",
+  "source": "https://raw.githubusercontent.com/apollyon-sys/wardogs-calculator/e8d1ee9ceb07fe9ec4923b7b55e836f8b3bb3e05/data/weapons.json",
   "retrievedUtc": "2026-09-16",
   "coordinateMetersPerUnit": 100,
   "units": "range meters, elevation game MIL",

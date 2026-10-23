@@ -26,12 +26,13 @@ public sealed class LatestCaptureWorker<T> : IDisposable where T : class, IDispo
         {
             if (_stopped)
             {
-                item.Dispose();
+                DisposeQuietly(item);
                 return;
             }
-            _pending?.Dispose();
+            var replaced = _pending;
             _pending = item;
             Monitor.Pulse(_gate);
+            DisposeQuietly(replaced);
         }
     }
 
@@ -39,8 +40,22 @@ public sealed class LatestCaptureWorker<T> : IDisposable where T : class, IDispo
     {
         lock (_gate)
         {
-            _pending?.Dispose();
+            var discarded = _pending;
             _pending = null;
+            DisposeQuietly(discarded);
+        }
+    }
+
+    // A throwing item must never leave a disposed item pending or skip shutdown's worker join.
+    private static void DisposeQuietly(T? item)
+    {
+        try
+        {
+            item?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError("LatestCaptureWorker item disposal threw: {0}", ex);
         }
     }
 
@@ -76,20 +91,13 @@ public sealed class LatestCaptureWorker<T> : IDisposable where T : class, IDispo
                     }
                     catch (Exception callbackEx)
                     {
-                        System.Diagnostics.Trace.TraceError("LatestCaptureWorker failure callback threw: {0}", callbackEx);
+                        Trace.TraceError("LatestCaptureWorker failure callback threw: {0}", callbackEx);
                     }
                 }
             }
             finally
             {
-                try
-                {
-                    item.Dispose();
-                }
-                catch (Exception disposeEx)
-                {
-                    System.Diagnostics.Trace.TraceError("LatestCaptureWorker item disposal threw: {0}", disposeEx);
-                }
+                DisposeQuietly(item);
             }
         }
     }
@@ -99,9 +107,10 @@ public sealed class LatestCaptureWorker<T> : IDisposable where T : class, IDispo
         lock (_gate)
         {
             _stopped = true;
-            _pending?.Dispose();
+            var discarded = _pending;
             _pending = null;
             Monitor.Pulse(_gate);
+            DisposeQuietly(discarded);
         }
         // The worker never waits for the UI dispatcher; the OCR owner may now safely dispose it.
         _worker.GetAwaiter().GetResult();

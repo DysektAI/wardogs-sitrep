@@ -6,6 +6,7 @@ namespace Sitrep.Core;
 public static partial class CoordinateParser
 {
     // Keep numeric-like malformed bodies (xBAD1, x.77, x + 101.53), but not alphabetic words or lone labels.
+    // Any Unicode digit or dash after an axis is a candidate, so OCR noise like x١٠١ rejects instead of being skipped.
     // Surrogates are not delimiters either; an adjacent supplementary Unicode letter is still part of a token.
     [GeneratedRegex(@"(?<![\p{L}\p{M}\p{N}\p{Pc}\p{Cf}\p{Cs}+\-\u2212])(?<axis>[XxYy])(?=\s*[0-9.,+\-\u2212]|\S*[0-9])\s*(?<body>[+-]?[0-9][0-9.,]*)?", RegexOptions.CultureInvariant)]
     private static partial Regex AxisTokenRegex();
@@ -14,7 +15,7 @@ public static partial class CoordinateParser
         char.IsLetterOrDigit(value) || char.IsSurrogate(value) || value is '+' or '-' or '\u2212'
         || char.GetUnicodeCategory(value) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark
             or UnicodeCategory.EnclosingMark or UnicodeCategory.ConnectorPunctuation or UnicodeCategory.Format
-            or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber;
+            or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber or UnicodeCategory.DashPunctuation;
 
     public static bool TryParse(string? rawText, out MapCoordinate coordinate, out string rejectionReason)
     {

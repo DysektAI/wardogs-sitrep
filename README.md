@@ -31,13 +31,15 @@ Windows/C# helper: Ctrl+middle-click sets the mortar origin, Shift+middle-click 
 3. Start the app. The header pill should read `GAME RUNNING`, and `IN GAME` once the game window is in the foreground. If it stays at `GAME NOT FOUND`, type the executable name shown as "Last seen app" into *Game executable name* while the game is focused.
 4. Stand at the mortar, hover its map position and press Ctrl + middle click (overlay shows ORIGIN SET—AWAITING TARGET).
 5. Hover a target on the map, press Shift + middle click. Overlay should show the same numbers as the map labels plus range/bearing/MIL.
-6. Try F9 (clears), alt-tab out and back (overlay hides while unfocused, then shows WINDOW LOST until a fresh target; old solution is gone), a click in the gutter outside the map (`OUTSIDE MAP AREA`), and Unlock overlay → drag → double-click to lock. Game-window closure clears the origin too.
+6. Try F9 (clears), alt-tab out and back (overlay hides while unfocused, then shows `WINDOW LOST—RETARGET` until a fresh target; old solution is gone), a click in the gutter outside the map (`OUTSIDE MAP AREA`), and Unlock overlay → drag → double-click to lock. Game-window closure clears the origin too.
 
 ## Diagnostics
-`Sitrep.exe` is a GUI-subsystem process. Do not trust direct PowerShell invocation to wait or set `$LASTEXITCODE`; use the same helper as CI (it redirects output and checks the actual process exit):
+`Sitrep.exe` is a GUI-subsystem process. Do not trust direct PowerShell invocation to wait or set `$LASTEXITCODE`; use the same helper as CI (it redirects output and checks the actual process exit). Run `scripts/publish.ps1` first so the packaged executable exists:
 
 ```powershell
+& {
 . ./scripts/common.ps1
+New-Item -ItemType Directory -Path out -Force | Out-Null
 $exe = (Resolve-Path 'out/Sitrep-win-x64/Sitrep.exe').Path
 Invoke-PackagedCheck $exe @('--self-test')
 # Negative fixture (committed, exit 2):
@@ -46,6 +48,7 @@ Invoke-PackagedCheck $exe @('--diagnose-image', (Resolve-Path 'tests/fixtures-ne
 # Or local user fixture if supplied (gitignored MapCords.png, exit 0):
 # Invoke-PackagedCheck $exe @('--diagnose-image', (Resolve-Path 'MapCords.png').Path,
 #   '--crop', '900,640,300,180', '--report', "$PWD/out/origin.json")
+}
 ```
 
 Self-test is dependency smoke. Image diagnosis shares live OCR; exit 0 means accepted, 2 means OCR/dependency rejection, 1 means invocation/file/error failure. Reports preserve raw recipe text and engine confidence (not a correctness probability). Debug mode stores at most 50 complete PNG/JSON records (100 files) locally, with unique names and serialized writes across SITREP instances. Retention removes pairs together; failed writes are rolled back and later saves repair interrupted-write remnants. Locked/unwritable storage remains best effort and never changes the OCR result. The old unbounded `records.log` is retired.

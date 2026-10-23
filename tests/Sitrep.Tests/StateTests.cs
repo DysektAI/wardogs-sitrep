@@ -31,8 +31,10 @@ public sealed class StateTests
     public void OutsideMapOriginClearsUsableOriginWithSpecificStatus()
     {
         var s = new AssistantState(SmallTable());
-        s.Complete(Ok(s.BeginOrigin(1, 0, 0, 0, 0, 10, 10), new MapCoordinate(100, 100)));
+        Assert.True(s.Complete(Ok(s.BeginOrigin(1, 0, 0, 0, 0, 10, 10), new MapCoordinate(100, 100))));
+        Assert.NotNull(s.ConfirmedOrigin);
         var retry = s.BeginOrigin(1, 0, 0, 0, 0, 10, 10);
+        Assert.Null(s.ConfirmedOrigin);
         Assert.True(s.Complete(Fail(retry, DisplayStatuses.OutsideMap)));
         Assert.Equal(DisplayStatuses.OutsideMap, s.Status);
         Assert.Null(s.ConfirmedOrigin);
@@ -134,7 +136,8 @@ public sealed class StateTests
         var req = s.BeginOrigin(1, 0, 0, 0, 0, 10, 10);
         if (role == CaptureRole.Target)
         {
-            s.Complete(Ok(req, new MapCoordinate(100, 100)));
+            Assert.True(s.Complete(Ok(req, new MapCoordinate(100, 100))));
+            Assert.NotNull(s.ConfirmedOrigin);
             req = s.BeginTarget(1, 0, 0, 0, 0, 10, 10).Request!;
         }
         s.OnGameWindowClosed();

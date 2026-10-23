@@ -1,6 +1,6 @@
 # English OCR model
 
-Run `pwsh -File scripts/setup-model.ps1` from the repository to retrieve the official `tessdata_fast` English LSTM model; application startup never downloads it.
+Run `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup-model.ps1` from the repository to retrieve the official `tessdata_fast` English LSTM model; application startup never downloads it.
 
 - Source: https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata
 - Revision: `87416418657359cb625c412a48b6e1d6d41c29bd`

@@ -35,7 +35,8 @@ public sealed class ForegroundSessionTests
         var foreground = new ForegroundSession(state);
         foreground.Observe(10, true, _ => true);
         var origin = state.BeginOrigin(10, 0, 0, 0, 0, 10, 10);
-        state.Complete(Ok(origin, new MapCoordinate(100, 100)));
+        Assert.True(state.Complete(Ok(origin, new MapCoordinate(100, 100))));
+        Assert.NotNull(state.ConfirmedOrigin);
         foreground.Observe(20, true, _ => true);
         Assert.Equal(10, foreground.AttachedWindow);
         Assert.False(foreground.IsForeground);
@@ -59,5 +60,23 @@ public sealed class ForegroundSessionTests
         Assert.Null(state.ConfirmedOrigin);
         Assert.False(state.Complete(Ok(pending, new MapCoordinate(101, 102))));
         Assert.Equal(DisplayStatuses.SetMortar, state.Status);
+    }
+
+    [Fact]
+    public void ClosureAfterCompletedTargetClearsSolutionAndOrigin()
+    {
+        var state = new AssistantState(null, true);
+        var foreground = new ForegroundSession(state);
+        foreground.Observe(10, true, _ => true);
+        Assert.True(state.Complete(Ok(state.BeginOrigin(10, 0, 0, 0, 0, 10, 10), new MapCoordinate(100, 100))));
+        Assert.True(state.Complete(Ok(state.BeginTarget(10, 0, 0, 0, 0, 10, 10).Request!, new MapCoordinate(101, 102))));
+        Assert.NotNull(state.ActiveTarget);
+        Assert.NotNull(state.RangeMeters);
+        Assert.NotNull(state.BearingDegrees);
+        foreground.Observe(20, false, _ => false);
+        Assert.Null(state.ActiveTarget);
+        Assert.Null(state.RangeMeters);
+        Assert.Null(state.BearingDegrees);
+        Assert.Null(state.ConfirmedOrigin);
     }
 }

@@ -237,7 +237,8 @@ internal static class Win32
 
     public static Core.CaptureRegion? GetCaptureBounds(IntPtr hwnd, int cursorX, int cursorY)
     {
-        if (GetClientRegion(hwnd) is not { } client)
+        // A cursor outside the client area is not a valid OCR anchor, even while the game stays foreground.
+        if (GetClientRegion(hwnd) is not { } client || !client.Contains(cursorX, cursorY))
         {
             return null;
         }

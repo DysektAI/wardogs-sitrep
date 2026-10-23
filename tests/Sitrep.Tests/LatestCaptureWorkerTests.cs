@@ -158,4 +158,46 @@ public sealed class LatestCaptureWorkerTests
         Assert.Equal(1, second.DisposeCount);
         Assert.Equal(1, third.DisposeCount);
     }
+
+    [Fact]
+    public async Task ThrowingPendingDisposalOnReplaceDiscardAndShutdownKeepsOwnership()
+    {
+        using var release = new ManualResetEventSlim();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processed = new ConcurrentQueue<int>();
+        var worker = new LatestCaptureWorker<FaultyFrame>(frame =>
+        {
+            processed.Enqueue(frame.Id);
+            if (frame.Id == 1)
+            {
+                started.TrySetResult();
+                if (!release.Wait(TimeSpan.FromSeconds(10))) { throw new TimeoutException(); }
+            }
+        }, (_, _) => { });
+        var busy = new FaultyFrame(1);
+        var replaced = new FaultyFrame(2, throwOnDispose: true);
+        var replacement = new FaultyFrame(3);
+        var discarded = new FaultyFrame(4, throwOnDispose: true);
+        var pendingAtShutdown = new FaultyFrame(5, throwOnDispose: true);
+        worker.Enqueue(busy);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        worker.Enqueue(replaced);
+        worker.Enqueue(replacement);
+        worker.DiscardPending();
+        worker.Enqueue(discarded);
+        worker.DiscardPending();
+        worker.Enqueue(pendingAtShutdown);
+        var shutdown = Task.Run(worker.Dispose);
+        await pendingAtShutdown.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(shutdown.IsCompleted);
+        release.Set();
+        await shutdown.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(new[] { 1 }, processed.ToArray());
+        foreach (var frame in new[] { busy, replaced, replacement, discarded, pendingAtShutdown })
+        {
+            Assert.Equal(1, frame.DisposeCount);
+        }
+    }
 }
